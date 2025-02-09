@@ -15,7 +15,14 @@ import sys
 os.environ["PATH"] += os.pathsep + "/usr/local/bin"  
 from pydub import AudioSegment
 # AudioSegment.converter = "/usr/local/bin/ffmpeg"  # Set ffmpeg path
+# Progress file to communicate with Streamlit
+PROGRESS_FILE = "progress.txt"
 
+def write_progress(progress):
+    """Write progress to a file."""
+    with open(PROGRESS_FILE, "w") as f:
+        f.write(str(progress))
+        
 # Debug log file
 DEBUG_LOG_FILE = "debug_log.txt"
 
@@ -250,6 +257,9 @@ def main():
         os.remove("output_transcript.srt")
     if os.path.exists("output_trimmed.mp4"):
         os.remove("output_trimmed.mp4")
+    
+    # Initialize progress
+    write_progress(0)
 
     # Step 1: Get filler words to filter out
     filler_words = get_filler_words()
@@ -257,32 +267,42 @@ def main():
 
     # Step 2: Load the video
     video_clip = load_video(input_video)
+    write_progress(10)  # 10% progress
+    print("Video loaded successfully.")
 
     # Step 3: Extract audio from the unmodified video
     audio_path = extract_audio(video_clip)
 
     # Step 4: Transcribe the audio to detect filler words
     words = transcribe_audio(audio_path)
+    write_progress(20)  # 20% progress
+    print("Audio transcribed successfully.")
 
     # Step 5: Generate SRT transcript for the input video
     input_srt_path = "input_transcript.srt"
     generate_srt(words, input_srt_path)
     log_debug(f"DEBUG: Input video transcript saved to: {input_srt_path}")
+    write_progress(25)  # 25% progress
+    print("Input video SRT generated successfully.")
 
     # Step 6: Detect filler words in the unmodified video
     if filler_words:
         filler_intervals = detect_filler_words(words, filler_words)
         filler_intervals = merge_intervals(filler_intervals)
-        
+        write_progress(30)  # 30% progress
+        print("Identifying filler words...")
         # Step 7: Replace filler words with silence in the audio (with buffer)
         modified_audio_path = "temp_modified_audio.wav"
         replace_filler_words_with_silence(audio_path, filler_intervals, modified_audio_path, buffer=0.01)
-        
+        write_progress(40)  # 40% progress
+        print("Replacing filler words...")
         # Step 8: Detect non-silent intervals in the modified audio
         non_silent_times = detect_non_silent_intervals(modified_audio_path)
         
         # Step 9: Trim the video and audio to remove the silent segments
         final_video_path = trim_video_and_audio(video_clip, non_silent_times, output_video)
+        write_progress(50)  # 50% progress
+        print("Removing filler words...")
         log_debug(f"Filler words removed. Final video saved to: {final_video_path}")
     else:
         log_debug("No filler words detected. Skipping removal.")
@@ -295,6 +315,8 @@ def main():
     output_srt_path = "output_transcript.srt"
     generate_srt(output_words, output_srt_path)
     log_debug(f"DEBUG: Output video transcript saved to: {output_srt_path}")
+    write_progress(80)  # 80% progress
+    print("Generating final video and output SRT...")
 
     # Clean up temporary files
     os.remove(audio_path)
@@ -302,10 +324,14 @@ def main():
         os.remove("temp_modified_audio.wav")
     if os.path.exists("temp_output_audio.wav"):
         os.remove("temp_output_audio.wav")
+    write_progress(90)  # 90% progress
+    print("Cleaning up temp files...")
 
     print(f"Trimmed video saved to: {final_video_path}")
     print(f"Debug log saved to: {DEBUG_LOG_FILE}")
     consolidate_debug_log(DEBUG_LOG_FILE, "consolidated_debug_log.txt")
+    write_progress(100)  # 100% progress
+    print("Video processed successfully.")
 
 if __name__ == "__main__":
     main()
