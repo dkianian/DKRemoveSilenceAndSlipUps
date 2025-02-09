@@ -9,6 +9,7 @@ import json
 import re
 import whisper
 import requests
+import sys
 
 # Ensure ffmpeg is in PATH
 os.environ["PATH"] += os.pathsep + "/usr/local/bin"  
@@ -219,17 +220,22 @@ def generate_srt(transcription, output_srt_path):
             srt_file.write(f"{text}\n\n")
 
 def main():
-    # Prompt the user for the video file path or URL
-    video_input = input("Enter the path to the video file or a URL: ").strip()
-
-    # Determine if the input is a URL or a file path
-    if video_input.startswith(('http://', 'https://')):
-        # Download the video from the URL
-        input_video = "downloaded_video.mp4"
-        download_video_from_url(video_input, input_video)
+    # Check if a file path argument was passed from Streamlit
+    if len(sys.argv) > 1:
+        input_video = sys.argv[1].strip()  # Get the file path from the argument
+        print(f"Processing video: {input_video}")
     else:
-        # Use the provided file path
-        input_video = video_input
+        # Prompt the user for the video file path or URL
+        video_input = input("Enter the path to the video file or a URL: ").strip()
+
+        # Determine if the input is a URL or a file path
+        if video_input.startswith(('http://', 'https://')):
+            # Download the video from the URL
+            input_video = "downloaded_video.mp4"
+            download_video_from_url(video_input, input_video)
+        else:
+            # Use the provided file path
+            input_video = video_input
 
     output_video = "output_trimmed.mp4"
 
