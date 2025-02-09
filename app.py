@@ -9,6 +9,7 @@ import numpy as np
 import requests
 import subprocess
 import threading
+import time
 
 os.chdir(os.path.dirname(__file__))  # Ensure script runs in the correct directory
 
@@ -43,6 +44,14 @@ if uploaded_file is not None:
 # Processing button
 if st.button("Process Video"):
     with st.spinner("Processing..."):
+        # Create a progress bar
+        progress_bar = st.progress(0)
+        
+        # Simulate processing with a progress update
+        for percent_complete in range(100):
+            time.sleep(0.1)  # Simulate a time-consuming task
+            progress_bar.progress(percent_complete + 1)
+
         # Run video_toolv3.py with the saved file path as an argument
         result = subprocess.run(["python", "video_toolv3.py", save_path], capture_output=True, text=True)
         
