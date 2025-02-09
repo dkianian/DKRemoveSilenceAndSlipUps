@@ -32,15 +32,15 @@ def run_script(input_path, filler_words):
     """Run video_toolv3.py with the provided input path and filler words."""
     try:
         # Pass the input path and filler words as arguments
-        result = subprocess.run(
+        process = subprocess.Popen(
             ["python", "video_toolv3.py", input_path, "--filler-words", ",".join(filler_words)],
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            check=True,
         )
-        return result
-    except subprocess.CalledProcessError as e:
-        st.error(f"Error: {e.stderr}")
+        return process
+    except Exception as e:
+        st.error(f"Error starting subprocess: {e}")
         return None
 
 # Processing button
@@ -54,11 +54,24 @@ if st.button("Process Video"):
             f.write(uploaded_file.getbuffer())  # Save file to disk
 
         st.success(f"File saved: {save_path}")
+        input_path = save_path
+    elif video_url:
+        input_path = video_url
+    else:
+        st.error("Please upload a file or provide a video URL.")
+        st.stop()
     with st.spinner("Processing..."):
         # Create a progress bar
         progress_bar = st.progress(0)
         status_text = st.empty()
-        
+   
+    # Run the backend script
+    process = run_script(input_path, filler_words)
+
+    if process is None:
+        st.error("Failed to start the processing script.")
+        st.stop()
+
     # Monitor progress
     while process.poll() is None:  # While the process is running
         if os.path.exists("progress.txt"):
@@ -72,11 +85,10 @@ if st.button("Process Video"):
     progress_bar.progress(100)
     status_text.text("Processing complete!")
 
-        # Run video_toolv3.py with the saved file path or URL and filler words
-    result = run_script(input_path, filler_words)
-
-    if result and result.returncode == 0:
+    # Check the result of the process
+    stdout, stderr = process.communicate()
+    if process.returncode == 0:
         st.success("Processing complete!")
-        st.write(result.stdout)  # Display the output of video_toolv3.py
+        st.write(stdout)  # Display the output of video_toolv3.py
     else:
-        st.error("Processing failed. Please check the input and try again.")
+        st.error(f"Processing failed. Error: {stderr}")
