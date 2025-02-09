@@ -294,6 +294,8 @@ def main():
     os.remove(audio_path)
     if os.path.exists("temp_modified_audio.wav"):
         os.remove("temp_modified_audio.wav")
+    if os.path.exists("temp_output_audio.wav"):
+        os.remove("temp_output_audio.wav")
 
     print(f"Trimmed video saved to: {final_video_path}")
     print(f"Debug log saved to: {DEBUG_LOG_FILE}")
