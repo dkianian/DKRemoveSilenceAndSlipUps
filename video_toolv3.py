@@ -43,6 +43,8 @@ def write_progress(progress):
 # Debug log file
 DEBUG_LOG_FILE = "debug_log.txt"
 
+whisper_model = whisper.load_model("base")
+
 def log_debug(message):
     """Log a debug message to a file."""
     if not os.path.exists(DEBUG_LOG_FILE):
@@ -118,9 +120,8 @@ def detect_non_silent_intervals(audio_path, top_db=40):
     non_silent_times = [(start / sr, end / sr) for start, end in non_silent_intervals]
     return non_silent_times
 
-def transcribe_audio(audio_path):
+def transcribe_audio(audio_path, model):
     """Transcribe the audio using OpenAI Whisper."""
-    model = whisper.load_model("base")
     result = model.transcribe(audio_path, word_timestamps=True)
     if "segments" not in result or not result["segments"]:
         print("Error: No segments found in transcription.")
@@ -144,8 +145,8 @@ def detect_filler_words(words, filler_words):
     log_debug(f"DEBUG: Filler words to detect: {filler_words}")
     detected_any = False
     for segment in words:
-        if "words" not in segment:
-            log_debug(f"Skipping segment without 'words': {segment}")
+        if not segment.get("words"):
+            log_debug(f"Skipping empty segment: {segment}")
             continue
         for word in segment["words"]:
             word_text = word["word"].strip().lower()
@@ -247,29 +248,16 @@ def generate_srt(transcription, output_srt_path):
 
 def main():
     # Check if a file path argument was passed from Streamlit
-    if len(sys.argv) > 1:
-        input_video = sys.argv[1].strip()  # Get the file path from the argument
-        print(f"Processing video: {input_video}")
-    elif "streamlit" in sys.modules:
-        video_input = st.text_input("Enter the path to the video file or a URL:")
-        
-        if video_input:
-            if video_input.startswith(('http://', 'https://')):
-                input_video = "downloaded_video.mp4"
-                download_video_from_url(video_input, input_video)
-            else:
-                input_video = video_input
-        else:
-            st.warning("Please enter a valid video file path or URL.")
-            st.stop()
+    if uploaded_file:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_file:
+            temp_file.write(uploaded_file.read())
+            input_video = temp_file.name
+    elif video_url:
+        input_video = "downloaded_video.mp4"
+        download_video_from_url(video_url, input_video)
     else:
-        video_input = input("Enter the path to the video file or a URL: ").strip()
-
-        if video_input.startswith(('http://', 'https://')):
-            input_video = "downloaded_video.mp4"
-            download_video_from_url(video_input, input_video)
-        else:
-            input_video = video_input
+        st.warning("Please upload a video file or enter a URL.")
+        st.stop()
     output_video = "output_trimmed.mp4"
 
     # Clean old debug logs, SRTs, and output
@@ -286,6 +274,7 @@ def main():
     
     # Initialize progress
     write_progress(0)
+    progress_bar = st.progress(0)
 
     # Step 1: Get filler words to filter out
     filler_words = get_filler_words()
@@ -293,41 +282,41 @@ def main():
 
     # Step 2: Load the video
     video_clip = load_video(input_video)
-    write_progress(10)  # 10% progress
+    progress_bar = st.progress(10)  # 10% progress
     print("Video loaded successfully.")
 
     # Step 3: Extract audio from the unmodified video
     audio_path = extract_audio(video_clip)
 
     # Step 4: Transcribe the audio to detect filler words
-    words = transcribe_audio(audio_path)
-    write_progress(20)  # 20% progress
+    words = transcribe_audio(audio_path, whisper_model)
+    progress_bar = st.progress(20)  # 20% progress
     print("Audio transcribed successfully.")
 
     # Step 5: Generate SRT transcript for the input video
     input_srt_path = "input_transcript.srt"
     generate_srt(words, input_srt_path)
     log_debug(f"DEBUG: Input video transcript saved to: {input_srt_path}")
-    write_progress(25)  # 25% progress
+    progress_bar = st.progress(25)  # 25% progress
     print("Input video SRT generated successfully.")
 
     # Step 6: Detect filler words in the unmodified video
     if filler_words:
         filler_intervals = detect_filler_words(words, filler_words)
         filler_intervals = merge_intervals(filler_intervals)
-        write_progress(30)  # 30% progress
+        progress_bar = st.progress(30)  # 30% progress
         print("Identifying filler words...")
         # Step 7: Replace filler words with silence in the audio (with buffer)
         modified_audio_path = "temp_modified_audio.wav"
         replace_filler_words_with_silence(audio_path, filler_intervals, modified_audio_path, buffer=0.01)
-        write_progress(40)  # 40% progress
+        progress_bar = st.progress(40)  # 40% progress
         print("Replacing filler words...")
         # Step 8: Detect non-silent intervals in the modified audio
         non_silent_times = detect_non_silent_intervals(modified_audio_path)
         
         # Step 9: Trim the video and audio to remove the silent segments
         final_video_path = trim_video_and_audio(video_clip, non_silent_times, output_video)
-        write_progress(50)  # 50% progress
+        progress_bar = st.progress(50)  # 50% progress
         print("Removing filler words...")
         log_debug(f"Filler words removed. Final video saved to: {final_video_path}")
     else:
@@ -341,7 +330,7 @@ def main():
     output_srt_path = "output_transcript.srt"
     generate_srt(output_words, output_srt_path)
     log_debug(f"DEBUG: Output video transcript saved to: {output_srt_path}")
-    write_progress(80)  # 80% progress
+    progress_bar = st.progress(80)  # 80% progress
     print("Generating final video and output SRT...")
 
     # Clean up temporary files
@@ -350,13 +339,13 @@ def main():
         os.remove("temp_modified_audio.wav")
     if os.path.exists("temp_output_audio.wav"):
         os.remove("temp_output_audio.wav")
-    write_progress(90)  # 90% progress
+    progress_bar = st.progress(90)  # 90% progress
     print("Cleaning up temp files...")
 
     print(f"Trimmed video saved to: {final_video_path}")
     print(f"Debug log saved to: {DEBUG_LOG_FILE}")
     consolidate_debug_log(DEBUG_LOG_FILE, "consolidated_debug_log.txt")
-    write_progress(100)  # 100% progress
+    progress_bar = st.progress(100)  # 100% progress
     print("Video loaded successfully.")
 
 if __name__ == "__main__":
