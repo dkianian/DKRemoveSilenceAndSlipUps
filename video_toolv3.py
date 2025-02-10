@@ -13,6 +13,21 @@ import sys
 import streamlit as st
 import tempfile
 
+# Set up page title
+st.set_page_config(page_title="Automated Video Editor", layout="wide")
+
+# Title and description
+st.title("Automated Video Editor")
+st.markdown("This tool allows you to process a video by removing user-selected filler words and silent portions.")
+
+# Upload a file or provide a URL
+uploaded_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi", "mkv"])
+video_url = st.text_input("Or enter a video URL:")
+
+# Get user input for filler words
+filler_words_input = st.text_input("Enter filler words to remove (comma-separated):")
+filler_words = [word.strip().lower() for word in filler_words_input.split(",") if word.strip()]
+
 # Ensure ffmpeg is in PATH
 os.environ["PATH"] += os.pathsep + "/usr/local/bin"  
 from pydub import AudioSegment
