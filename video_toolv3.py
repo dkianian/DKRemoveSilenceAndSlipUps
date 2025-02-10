@@ -18,7 +18,7 @@ import imageio_ffmpeg
 
 # Check if the script is running in Streamlit
 RUNNING_IN_STREAMLIT = "streamlit" in sys.argv[0]
-
+os.environ["TORCH_USE_RTLD_GLOBAL"] = "1"
 # Ensure FFmpeg is available
 ffmpeg_path = shutil.which("ffmpeg")
 
