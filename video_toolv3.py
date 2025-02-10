@@ -12,6 +12,7 @@ import requests
 import sys
 import streamlit as st
 import tempfile
+import shutil
 
 # Check if the script is running in Streamlit
 RUNNING_IN_STREAMLIT = "streamlit" in sys.argv[0]
@@ -22,7 +23,8 @@ from pydub import AudioSegment
 # AudioSegment.converter = "/usr/local/bin/ffmpeg"  # Set ffmpeg path
 # Progress file to communicate with Streamlit
 PROGRESS_FILE = "progress.txt"
-
+if shutil.which("ffmpeg") is None:
+    print("FFmpeg not found. Please install FFmpeg and add it to your PATH.")
 def write_progress(progress):
     """Write progress to a file."""
     with open(PROGRESS_FILE, "w") as f:
