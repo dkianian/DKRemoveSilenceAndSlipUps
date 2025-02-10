@@ -19,6 +19,7 @@ import tempfile
 import shutil
 import subprocess
 import imageio_ffmpeg
+import timefrom datetime import timedelta
 
 # Check if the script is running in Streamlit
 RUNNING_IN_STREAMLIT = "streamlit" in sys.argv[0]
@@ -302,6 +303,9 @@ def main(uploaded_file, video_url, filler_words_input):
         st.stop()
     output_video = "output_trimmed.mp4"
 
+    # Log start time
+    start_time = time.time()
+
     # Clean old debug logs, SRTs, and output
     if os.path.exists(DEBUG_LOG_FILE):
         os.remove(DEBUG_LOG_FILE)
@@ -320,6 +324,10 @@ def main(uploaded_file, video_url, filler_words_input):
         st.session_state.progress_bar = st.progress(0)  # Create a single instance
     progress_bar = st.session_state.progress_bar
 
+    # Create placeholders for time elapsed and remaining
+    time_elapsed_placeholder = st.empty()
+    time_remaining_placeholder = st.empty()
+
     # Step 1: Get filler words to filter out
     filler_words = get_filler_words(filler_words_input.strip()) if filler_words_input else []
     log_debug(f"Filler words to filter out: {filler_words}")
@@ -329,40 +337,94 @@ def main(uploaded_file, video_url, filler_words_input):
     progress_bar.progress(10)  # 10% progress
     print("Video loaded successfully.")
 
+    # Update time elapsed and remaining
+    elapsed_time = time.time() - start_time
+    estimated_total_time = elapsed_time / 0.1  # Assuming 10% progress
+    remaining_time = estimated_total_time - elapsed_time
+    time_elapsed_placeholder.text(f"Time Elapsed: {timedelta(seconds=int(elapsed_time))}")
+    time_remaining_placeholder.text(f"Estimated Time Remaining: {timedelta(seconds=int(remaining_time))}")
+
     # Step 3: Extract audio from the unmodified video
     audio_path = extract_audio(video_clip)
+    progress_bar.progress(15)  # 15% progress
+    print("Audio extracted")
+
+    # Update time elapsed and remaining
+    elapsed_time = time.time() - start_time
+    estimated_total_time = elapsed_time / 0.15  # Assuming 15% progress
+    remaining_time = estimated_total_time - elapsed_time
+    time_elapsed_placeholder.text(f"Time Elapsed: {timedelta(seconds=int(elapsed_time))}")
+    time_remaining_placeholder.text(f"Estimated Time Remaining: {timedelta(seconds=int(remaining_time))}")
 
     # Step 4: Transcribe the audio to detect filler words
     words = transcribe_audio(audio_path, whisper_model)
-    progress_bar.progress(20)  # 20% progress
+    progress_bar.progress(30)  # 30% progress
     print("Audio transcribed successfully.")
+
+    # Update time elapsed and remaining
+    elapsed_time = time.time() - start_time
+    estimated_total_time = elapsed_time / 0.3  # Assuming 30% progress
+    remaining_time = estimated_total_time - elapsed_time
+    time_elapsed_placeholder.text(f"Time Elapsed: {timedelta(seconds=int(elapsed_time))}")
+    time_remaining_placeholder.text(f"Estimated Time Remaining: {timedelta(seconds=int(remaining_time))}")
 
     # Step 5: Generate SRT transcript for the input video
     input_srt_path = "input_transcript.srt"
     generate_srt(words, input_srt_path)
     log_debug(f"DEBUG: Input video transcript saved to: {input_srt_path}")
-    progress_bar.progress(25)  # 25% progress
+    progress_bar.progress(35)  # 35% progress
     print("Input video SRT generated successfully.")
+
+    # Update time elapsed and remaining
+    elapsed_time = time.time() - start_time
+    estimated_total_time = elapsed_time / 0.35  # Assuming 35% progress
+    remaining_time = estimated_total_time - elapsed_time
+    time_elapsed_placeholder.text(f"Time Elapsed: {timedelta(seconds=int(elapsed_time))}")
+    time_remaining_placeholder.text(f"Estimated Time Remaining: {timedelta(seconds=int(remaining_time))}")
 
     # Step 6: Detect filler words in the unmodified video
     if filler_words:
         filler_intervals = detect_filler_words(words, filler_words)
         filler_intervals = merge_intervals(filler_intervals)
-        progress_bar.progress(30)  # 30% progress
+        progress_bar.progress(40)  # 40% progress
         print("Identifying filler words...")
+
+        # Update time elapsed and remaining
+        elapsed_time = time.time() - start_time
+        estimated_total_time = elapsed_time / 0.4  # Assuming 40% progress
+        remaining_time = estimated_total_time - elapsed_time
+        time_elapsed_placeholder.text(f"Time Elapsed: {timedelta(seconds=int(elapsed_time))}")
+        time_remaining_placeholder.text(f"Estimated Time Remaining: {timedelta(seconds=int(remaining_time))}")
+
         # Step 7: Replace filler words with silence in the audio (with buffer)
         modified_audio_path = "temp_modified_audio.wav"
         replace_filler_words_with_silence(audio_path, filler_intervals, modified_audio_path, buffer=0.01)
-        progress_bar.progress(40)  # 40% progress
+        progress_bar.progress(50)  # 50% progress
         print("Replacing filler words...")
+
+        # Update time elapsed and remaining
+        elapsed_time = time.time() - start_time
+        estimated_total_time = elapsed_time / 0.5  # Assuming 50% progress
+        remaining_time = estimated_total_time - elapsed_time
+        time_elapsed_placeholder.text(f"Time Elapsed: {timedelta(seconds=int(elapsed_time))}")
+        time_remaining_placeholder.text(f"Estimated Time Remaining: {timedelta(seconds=int(remaining_time))}")
+
         # Step 8: Detect non-silent intervals in the modified audio
         non_silent_times = detect_non_silent_intervals(modified_audio_path)
         
         # Step 9: Trim the video and audio to remove the silent segments
         final_video_path = trim_video_and_audio(video_clip, non_silent_times, output_video)
-        progress_bar.progress(50)  # 50% progress
+        progress_bar.progress(60)  # 60% progress
         print("Removing filler words...")
         log_debug(f"Filler words removed. Final video saved to: {final_video_path}")
+
+        # Update time elapsed and remaining
+        elapsed_time = time.time() - start_time
+        estimated_total_time = elapsed_time / 0.6  # Assuming 60% progress
+        remaining_time = estimated_total_time - elapsed_time
+        time_elapsed_placeholder.text(f"Time Elapsed: {timedelta(seconds=int(elapsed_time))}")
+        time_remaining_placeholder.text(f"Estimated Time Remaining: {timedelta(seconds=int(remaining_time))}")
+
     else:
         log_debug("No filler words detected. Skipping removal.")
         final_video_path = input_video  # Skip filler word removal if no words provided
@@ -376,6 +438,13 @@ def main(uploaded_file, video_url, filler_words_input):
     log_debug(f"DEBUG: Output video transcript saved to: {output_srt_path}")
     progress_bar.progress(80)  # 80% progress
     print("Generating final video and output SRT...")
+
+    # Update time elapsed and remaining
+    elapsed_time = time.time() - start_time
+    estimated_total_time = elapsed_time / 0.8  # Assuming 80% progress
+    remaining_time = estimated_total_time - elapsed_time
+    time_elapsed_placeholder.text(f"Time Elapsed: {timedelta(seconds=int(elapsed_time))}")
+    time_remaining_placeholder.text(f"Estimated Time Remaining: {timedelta(seconds=int(remaining_time))}")
 
     # Clean up temporary files
     os.remove(audio_path)
