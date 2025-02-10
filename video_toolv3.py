@@ -47,9 +47,29 @@ def streamlit_ui():
     filler_words_input = st.text_input("Enter filler words to remove (comma-separated)", "")
     filler_words = [word.strip().lower() for word in filler_words_input.split(",") if word.strip()]
 
-    # Run button
-    if st.button("Process Video"):
-        main(uploaded_file, video_url, filler_words_input)  # Call main() with user inputs
+    # Persistent Buttons with Session State
+    if "processing" not in st.session_state:
+        st.session_state.processing = False  # Keeps track of whether processing is ongoing
+
+    col1, col2 = st.columns(2)  # Arrange buttons side by side
+
+    # Process Video Button
+    with col1:
+        if st.button("Process Video", disabled=st.session_state.processing):
+            st.session_state.processing = True
+            st.session_state.status_message = st.empty()  # Placeholder for status messages
+            main(uploaded_file, video_url, filler_words_input)  # Call main()
+
+    # Reset Button
+    with col2:
+        if st.button("Reset"):
+            st.session_state.processing = False
+            st.session_state.status_message = None  # Clear status messages
+            st.experimental_rerun()  # Reset the UI
+
+    # Display processing status if running
+    if st.session_state.processing and "status_message" in st.session_state:
+        st.session_state.status_message.text("Processing video... Please wait.")
 
 def log_debug(message):
     """Log a debug message to a file."""
@@ -357,6 +377,12 @@ def main(uploaded_file, video_url, filler_words_input):
     if "final_clip" in locals():
         final_clip.close()  # Close the trimmed video if it was created
 
+    st.success("Processing completed successfully!")
+    write_progress(100)
+    # Final UI Updates After Processing Completes
+    progress_bar.progress(100)  # Mark progress as complete
+    st.success("Processing complete! Download the final video and transcripts below.")
+
     # Step 11: Generate DL Buttons
     if os.path.exists("output_trimmed.mp4"):
         with open("output_trimmed.mp4", "rb") as file:
@@ -368,10 +394,8 @@ def main(uploaded_file, video_url, filler_words_input):
         with open("output_transcript.srt", "r") as file:
             st.download_button(label="Download Processed Transcript (SRT)", data=file, file_name="output_transcript.srt", mime="text/plain")
 
-    st.success("Processing completed successfully!")
-    write_progress(100)
-    progress_bar.progress(100)
-    print("Done. You can close the Streamlit app or start a new task.")
+    # Reset Processing State
+    st.session_state.processing = False
 
 if __name__ == "__main__":
     streamlit_ui()
