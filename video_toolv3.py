@@ -19,7 +19,8 @@ import tempfile
 import shutil
 import subprocess
 import imageio_ffmpeg
-import timefrom datetime import timedelta
+import time 
+from datetime import timedelta
 
 # Check if the script is running in Streamlit
 RUNNING_IN_STREAMLIT = "streamlit" in sys.argv[0]
@@ -290,6 +291,8 @@ def generate_srt(transcription, output_srt_path):
             srt_file.write(f"{text}\n\n")
 
 def main(uploaded_file, video_url, filler_words_input):
+    # Initialize final_clip to None
+    final_clip = None
     # Check if a file path argument was passed from Streamlit
     if uploaded_file is not None:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_file:
@@ -413,10 +416,15 @@ def main(uploaded_file, video_url, filler_words_input):
         non_silent_times = detect_non_silent_intervals(modified_audio_path)
         
         # Step 9: Trim the video and audio to remove the silent segments
-        final_video_path = trim_video_and_audio(video_clip, non_silent_times, output_video)
-        progress_bar.progress(60)  # 60% progress
-        print("Removing filler words...")
-        log_debug(f"Filler words removed. Final video saved to: {final_video_path}")
+        if filler_words:
+            final_video_path = trim_video_and_audio(video_clip, non_silent_times, output_video)
+            final_clip = load_video(final_video_path) # Load the final clip
+            progress_bar.progress(60)  # 60% progress
+            print("Removing filler words...")
+            log_debug(f"Filler words removed. Final video saved to: {final_video_path}")
+        else:
+            log_debug("No filler words detected. Skipping removal.")
+            final_video_path = input_video
 
         # Update time elapsed and remaining
         elapsed_time = time.time() - start_time
@@ -460,8 +468,9 @@ def main(uploaded_file, video_url, filler_words_input):
     consolidate_debug_log(DEBUG_LOG_FILE, "consolidated_debug_log.txt")
     
     video_clip.close()  # Close the video file
-    if "final_clip" in locals():
-        final_clip.close()  # Close the trimmed video if it was created
+    # Close the trimmed video if it was created
+    if "final_clip" is not None:
+        final_clip.close()
 
     st.success("Processing completed successfully!")
     write_progress(100)
