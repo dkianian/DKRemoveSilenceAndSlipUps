@@ -1,53 +1,19 @@
-import os
-import subprocess
-import requests
-import shutil
-
-# Define FFmpeg download path
-FFMPEG_URL = "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-i686-static.tar.xz"
-FFMPEG_DIR = "/home/adminuser/ffmpeg"
-FFMPEG_BIN = os.path.join(FFMPEG_DIR, "ffmpeg")
-
-# Function to download and extract FFmpeg if missing
-def setup_ffmpeg():
-    if not os.path.exists(FFMPEG_BIN):
-        print("FFmpeg not found. Downloading...")
-        os.makedirs(FFMPEG_DIR, exist_ok=True)
-        ffmpeg_tar = os.path.join(FFMPEG_DIR, "ffmpeg.tar.xz")
-        
-        # Download FFmpeg
-        response = requests.get(FFMPEG_URL, stream=True)
-        with open(ffmpeg_tar, "wb") as f:
-            shutil.copyfileobj(response.raw, f)
-        
-        # Extract it
-        subprocess.run(["tar", "-xf", ffmpeg_tar, "-C", FFMPEG_DIR, "--strip-components=1"])
-        os.remove(ffmpeg_tar)  # Clean up
-
-    # Add FFmpeg to PATH
-    os.environ["PATH"] += os.pathsep + FFMPEG_DIR
-    print(f"Using FFmpeg from: {FFMPEG_BIN}")
-
-# Run FFmpeg setup
-setup_ffmpeg()
-
-
 from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips, concatenate_audioclips
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
 import librosa
 import numpy as np
 import soundfile as sf
-#import os
+import os
 import json
 import re
 import whisper
-#import requests
+import requests
 import sys
 import streamlit as st
 import tempfile
-#import shutil
-#import subprocess
+import shutil
+import subprocess
 import imageio_ffmpeg
 
 # Check if the script is running in Streamlit
@@ -60,6 +26,8 @@ if ffmpeg_path:
     os.environ["PATH"] += os.pathsep + os.path.dirname(ffmpeg_path)
     print(f"Using FFmpeg from: {ffmpeg_path}")
 else:
+    print("❌ FFmpeg is NOT installed. Checking system paths...")
+    print(os.environ["PATH"])  # Debug: print system PATH for verification
     raise FileNotFoundError("FFmpeg is not installed. Ensure ffmpeg-static is included in requirements.txt.")
   
 from pydub import AudioSegment
