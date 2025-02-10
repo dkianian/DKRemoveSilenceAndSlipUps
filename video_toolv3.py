@@ -1,10 +1,14 @@
+import os
+# ✅ Fix PyTorch watcher error in Streamlit
+os.environ["TORCH_USE_RTLD_GLOBAL"] = "1"
+# ✅ Disable Streamlit's file watcher to prevent interference with PyTorch
+os.environ["STREAMLIT_WATCH_FILE"] = "false"
 from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips, concatenate_audioclips
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
 import librosa
 import numpy as np
 import soundfile as sf
-import os
 import json
 import re
 import whisper
@@ -18,17 +22,17 @@ import imageio_ffmpeg
 
 # Check if the script is running in Streamlit
 RUNNING_IN_STREAMLIT = "streamlit" in sys.argv[0]
-os.environ["TORCH_USE_RTLD_GLOBAL"] = "1"
+
 # Ensure FFmpeg is available
 ffmpeg_path = shutil.which("ffmpeg")
 
-if ffmpeg_path:
-    os.environ["PATH"] += os.pathsep + os.path.dirname(ffmpeg_path)
-    print(f"Using FFmpeg from: {ffmpeg_path}")
-else:
-    print("❌ FFmpeg is NOT installed. Checking system paths...")
-    print(os.environ["PATH"])  # Debug: print system PATH for verification
-    raise FileNotFoundError("FFmpeg is not installed. Ensure ffmpeg-static is included in requirements.txt.")
+#if ffmpeg_path:
+#    os.environ["PATH"] += os.pathsep + os.path.dirname(ffmpeg_path)
+#    print(f"Using FFmpeg from: {ffmpeg_path}")
+#else:
+#    print("❌ FFmpeg is NOT installed. Checking system paths...")
+#    print(os.environ["PATH"])  # Debug: print system PATH for verification
+#    raise FileNotFoundError("FFmpeg is not installed. Ensure ffmpeg-static is included in requirements.txt.")
   
 from pydub import AudioSegment
 # AudioSegment.converter = "/usr/local/bin/ffmpeg"  # Set ffmpeg path
