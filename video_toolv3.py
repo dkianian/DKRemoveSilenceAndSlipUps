@@ -77,6 +77,7 @@ def streamlit_ui():
         if st.button("Process Video", disabled=st.session_state.processing):
             st.session_state.processing = True
             st.session_state.status_message = st.empty()  # Placeholder for status messages
+            st.session_state.start_time = time.time()  # Record start time
             main(uploaded_file, video_url, filler_words_input)  # Call main()
 
     # Reset Button
