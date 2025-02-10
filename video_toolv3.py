@@ -10,7 +10,8 @@ import re
 import whisper
 import requests
 import sys
-import argparse
+import streamlit as st
+import tempfile
 
 # Ensure ffmpeg is in PATH
 os.environ["PATH"] += os.pathsep + "/usr/local/bin"  
@@ -186,11 +187,13 @@ def trim_video_and_audio(video_clip, non_silent_times, output_video_path):
     return output_video_path
 
 def get_filler_words():
-    """Prompt the user for filler words to filter out."""
-    filler_input = input("What word(s) would you like to filter out? Separate each word with a comma: ")
-    if filler_input.strip():
-        return [word.strip().lower() for word in filler_input.split(",")]
-    return []
+    """Prompt the user for filler words, using Streamlit if available."""
+    if "streamlit" in sys.modules:
+        filler_input = st.text_input("Enter filler words to filter out (comma-separated):", "")
+    else:
+        filler_input = input("What word(s) would you like to filter out? Separate each word with a comma: ")
+
+    return [word.strip().lower() for word in filler_input.split(",")] if filler_input.strip() else []
 
 def merge_intervals(intervals):
     """Merge overlapping or adjacent intervals."""
@@ -229,17 +232,30 @@ def generate_srt(transcription, output_srt_path):
 
 def main():
     # Check if a file path argument was passed from Streamlit
-    parser = argparse.ArgumentParser(description="Process a video to remove filler words.")
-    parser.add_argument("input_video", help="Path to the input video file or URL")
-    parser.add_argument("--filler-words", type=str, default="", help="Comma-separated filler words to remove")
+    if len(sys.argv) > 1:
+        input_video = sys.argv[1].strip()  # Get the file path from the argument
+        print(f"Processing video: {input_video}")
+    elif "streamlit" in sys.modules:
+        video_input = st.text_input("Enter the path to the video file or a URL:")
+        
+        if video_input:
+            if video_input.startswith(('http://', 'https://')):
+                input_video = "downloaded_video.mp4"
+                download_video_from_url(video_input, input_video)
+            else:
+                input_video = video_input
+        else:
+            st.warning("Please enter a valid video file path or URL.")
+            st.stop()
+    else:
+        video_input = input("Enter the path to the video file or a URL: ").strip()
 
-    args = parser.parse_args()
-    
-    input_video = args.input_video
-    filler_words = [word.strip().lower() for word in args.filler_words.split(",") if word.strip()]
-    
-    print(f"Processing video: {input_video}")
-    print(f"Filler words to filter: {filler_words}")
+        if video_input.startswith(('http://', 'https://')):
+            input_video = "downloaded_video.mp4"
+            download_video_from_url(video_input, input_video)
+        else:
+            input_video = video_input
+    output_video = "output_trimmed.mp4"
 
     # Clean old debug logs, SRTs, and output
     if os.path.exists(DEBUG_LOG_FILE):
@@ -326,7 +342,7 @@ def main():
     print(f"Debug log saved to: {DEBUG_LOG_FILE}")
     consolidate_debug_log(DEBUG_LOG_FILE, "consolidated_debug_log.txt")
     write_progress(100)  # 100% progress
-    print("Video processed successfully.")
+    print("Video loaded successfully.")
 
 if __name__ == "__main__":
     main()
