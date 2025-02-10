@@ -311,7 +311,7 @@ def main(uploaded_file, video_url, filler_words_input):
     if filler_words:
         filler_intervals = detect_filler_words(words, filler_words)
         filler_intervals = merge_intervals(filler_intervals)
-        progress_bar = st.progress(30)  # 30% progress
+        progress_bar.progress(30)  # 30% progress
         print("Identifying filler words...")
         # Step 7: Replace filler words with silence in the audio (with buffer)
         modified_audio_path = "temp_modified_audio.wav"
@@ -352,8 +352,26 @@ def main(uploaded_file, video_url, filler_words_input):
     print(f"Trimmed video saved to: {final_video_path}")
     print(f"Debug log saved to: {DEBUG_LOG_FILE}")
     consolidate_debug_log(DEBUG_LOG_FILE, "consolidated_debug_log.txt")
-    progress_bar.progress(100)  # 100% progress
-    print("Video loaded successfully.")
+    
+    video_clip.close()  # Close the video file
+    if "final_clip" in locals():
+        final_clip.close()  # Close the trimmed video if it was created
+
+    # Step 11: Generate DL Buttons
+    if os.path.exists("output_trimmed.mp4"):
+        with open("output_trimmed.mp4", "rb") as file:
+            st.download_button(label="Download Trimmed Video", data=file, file_name="output_trimmed.mp4", mime="video/mp4")
+    if os.path.exists("input_transcript.srt"):
+        with open("input_transcript.srt", "r") as file:
+            st.download_button(label="Download Original Transcript (SRT)", data=file, file_name="input_transcript.srt", mime="text/plain")
+    if os.path.exists("output_transcript.srt"):
+        with open("output_transcript.srt", "r") as file:
+            st.download_button(label="Download Processed Transcript (SRT)", data=file, file_name="output_transcript.srt", mime="text/plain")
+
+    st.success("Processing completed successfully!")
+    write_progress(100)
+    progress_bar.progress(100)
+    print("Done. You can close the Streamlit app or start a new task.")
 
 if __name__ == "__main__":
     streamlit_ui()
