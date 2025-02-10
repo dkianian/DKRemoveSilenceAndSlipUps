@@ -53,8 +53,8 @@ DEBUG_LOG_FILE = "debug_log.txt"
 whisper_model = whisper.load_model("base")
 
 def streamlit_ui():
-    st.title("Don Kianian's Automated Video Processing Tool")
-    st.markdown("This tool allows you to process a video by removing user-selected words and silence.")
+    st.title("Don Kianian's Automated Video Editor")
+    st.markdown("This tool allows you to process long-form video by removing user-selected words and silence.")
     
     # File uploader for video
     uploaded_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi", "mkv"])
@@ -68,7 +68,9 @@ def streamlit_ui():
 
     # Persistent Buttons with Session State
     if "processing" not in st.session_state:
-        st.session_state.processing = False  # Keeps track of whether processing is ongoing
+        st.session_state.processing = False
+        st.session_state.start_time = None
+        st.session_state.current_step = ""
 
     col1, col2 = st.columns(2)  # Arrange buttons side by side
 
@@ -76,20 +78,24 @@ def streamlit_ui():
     with col1:
         if st.button("Process Video", disabled=st.session_state.processing):
             st.session_state.processing = True
-            st.session_state.status_message = st.empty()  # Placeholder for status messages
-            st.session_state.start_time = time.time()  # Record start time
-            main(uploaded_file, video_url, filler_words_input)  # Call main()
+            st.session_state.start_time = time.time()
+            st.session_state.current_step = "Starting processing..."
+            main(uploaded_file, video_url, filler_words_input)
 
     # Reset Button
     with col2:
         if st.button("Reset"):
             st.session_state.processing = False
-            st.session_state.status_message = None  # Clear status messages
-            st.experimental_rerun()  # Reset the UI
+            st.session_state.start_time = None
+            st.session_state.current_step = ""
+            st.experimental_rerun()
 
     # Display processing status if running
-    if st.session_state.processing and "status_message" in st.session_state:
-        st.session_state.status_message.text("Processing video... Please wait.")
+    if st.session_state.processing:
+        st.write(f"**Current Step:** {st.session_state.current_step}")
+        if st.session_state.start_time:
+            elapsed_time = time.time() - st.session_state.start_time
+            st.write(f"**Time Elapsed:** {timedelta(seconds=int(elapsed_time))}")
 
 def log_debug(message):
     """Log a debug message to a file."""
@@ -305,6 +311,7 @@ def main(uploaded_file, video_url, filler_words_input):
     else:
         st.warning("Please upload a video file or enter a URL.")
         st.stop()
+    
     output_video = "output_trimmed.mp4"
 
     # Log start time
@@ -333,11 +340,14 @@ def main(uploaded_file, video_url, filler_words_input):
     time_remaining_placeholder = st.empty()
 
     # Step 1: Get filler words to filter out
+    st.session_state.current_step = "Getting filler words..."
     filler_words = get_filler_words(filler_words_input.strip()) if filler_words_input else []
     log_debug(f"Filler words to filter out: {filler_words}")
 
     # Step 2: Load the video
-    video_clip = load_video(input_video)
+    st.session_state.current_step = "Loading video..."
+    with st.spinner("Loading video..."):
+        video_clip = load_video(input_video)
     progress_bar.progress(10)  # 10% progress
     print("Video loaded successfully.")
 
@@ -349,7 +359,9 @@ def main(uploaded_file, video_url, filler_words_input):
     time_remaining_placeholder.text(f"Estimated Time Remaining: {timedelta(seconds=int(remaining_time))}")
 
     # Step 3: Extract audio from the unmodified video
-    audio_path = extract_audio(video_clip)
+    st.session_state.current_step = "Extracting audio..."
+    with st.spinner("Extracting audio..."):
+        audio_path = extract_audio(video_clip)
     progress_bar.progress(15)  # 15% progress
     print("Audio extracted")
 
@@ -361,7 +373,9 @@ def main(uploaded_file, video_url, filler_words_input):
     time_remaining_placeholder.text(f"Estimated Time Remaining: {timedelta(seconds=int(remaining_time))}")
 
     # Step 4: Transcribe the audio to detect filler words
-    words = transcribe_audio(audio_path, whisper_model)
+    st.session_state.current_step = "Transcribing audio..."
+    with st.spinner("Transcribing audio..."):
+        words = transcribe_audio(audio_path, whisper_model)
     progress_bar.progress(30)  # 30% progress
     print("Audio transcribed successfully.")
 
@@ -373,6 +387,7 @@ def main(uploaded_file, video_url, filler_words_input):
     time_remaining_placeholder.text(f"Estimated Time Remaining: {timedelta(seconds=int(remaining_time))}")
 
     # Step 5: Generate SRT transcript for the input video
+    st.session_state.current_step = "Generating SRT transcript..."
     input_srt_path = "input_transcript.srt"
     generate_srt(words, input_srt_path)
     log_debug(f"DEBUG: Input video transcript saved to: {input_srt_path}")
@@ -387,9 +402,11 @@ def main(uploaded_file, video_url, filler_words_input):
     time_remaining_placeholder.text(f"Estimated Time Remaining: {timedelta(seconds=int(remaining_time))}")
 
     # Step 6: Detect filler words in the unmodified video
+    st.session_state.current_step = "Detecting filler words..."
     if filler_words:
-        filler_intervals = detect_filler_words(words, filler_words)
-        filler_intervals = merge_intervals(filler_intervals)
+        with st.spinner("Detecting filler words..."):
+            filler_intervals = detect_filler_words(words, filler_words)
+            filler_intervals = merge_intervals(filler_intervals)
         progress_bar.progress(40)  # 40% progress
         print("Identifying filler words...")
 
@@ -401,8 +418,10 @@ def main(uploaded_file, video_url, filler_words_input):
         time_remaining_placeholder.text(f"Estimated Time Remaining: {timedelta(seconds=int(remaining_time))}")
 
         # Step 7: Replace filler words with silence in the audio (with buffer)
-        modified_audio_path = "temp_modified_audio.wav"
-        replace_filler_words_with_silence(audio_path, filler_intervals, modified_audio_path, buffer=0.01)
+        st.session_state.current_step = "Removing filler words..."
+        with st.spinner("Removing filler words..."):
+            modified_audio_path = "temp_modified_audio.wav"
+            replace_filler_words_with_silence(audio_path, filler_intervals, modified_audio_path, buffer=0.01)
         progress_bar.progress(50)  # 50% progress
         print("Replacing filler words...")
 
@@ -417,15 +436,17 @@ def main(uploaded_file, video_url, filler_words_input):
         non_silent_times = detect_non_silent_intervals(modified_audio_path)
         
         # Step 9: Trim the video and audio to remove the silent segments
-        if filler_words:
-            final_video_path = trim_video_and_audio(video_clip, non_silent_times, output_video)
-            final_clip = load_video(final_video_path) # Load the final clip
-            progress_bar.progress(60)  # 60% progress
-            print("Removing filler words...")
-            log_debug(f"Filler words removed. Final video saved to: {final_video_path}")
-        else:
-            log_debug("No filler words detected. Skipping removal.")
-            final_video_path = input_video
+        st.session_state.current_step = "Trimming video and audio..."
+        with st.spinner("Trimming video and audio..."):
+            if filler_words:
+                final_video_path = trim_video_and_audio(video_clip, non_silent_times, output_video)
+                final_clip = load_video(final_video_path) # Load the final clip
+                progress_bar.progress(60)  # 60% progress
+                print("Removing filler words...")
+                log_debug(f"Filler words removed. Final video saved to: {final_video_path}")
+            else:
+                log_debug("No filler words detected. Skipping removal.")
+                final_video_path = input_video
 
         # Update time elapsed and remaining
         elapsed_time = time.time() - start_time
@@ -439,6 +460,7 @@ def main(uploaded_file, video_url, filler_words_input):
         final_video_path = input_video  # Skip filler word removal if no words provided
 
     # Step 10: Generate SRT transcript for the output trimmed video
+    st.session_state.current_step = "Generating SRT transcript..."
     output_audio_path = "temp_output_audio.wav"
     extract_audio(load_video(final_video_path), output_audio_path)
     output_words = transcribe_audio(output_audio_path, model=whisper_model)
@@ -456,6 +478,7 @@ def main(uploaded_file, video_url, filler_words_input):
     time_remaining_placeholder.text(f"Estimated Time Remaining: {timedelta(seconds=int(remaining_time))}")
 
     # Clean up temporary files
+    st.session_state.current_step = "Tidying up..."
     os.remove(audio_path)
     if os.path.exists("temp_modified_audio.wav"):
         os.remove("temp_modified_audio.wav")
