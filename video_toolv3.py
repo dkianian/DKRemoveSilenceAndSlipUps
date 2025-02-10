@@ -10,6 +10,7 @@ import re
 import whisper
 import requests
 import sys
+import argparse
 
 # Ensure ffmpeg is in PATH
 os.environ["PATH"] += os.pathsep + "/usr/local/bin"  
@@ -228,23 +229,17 @@ def generate_srt(transcription, output_srt_path):
 
 def main():
     # Check if a file path argument was passed from Streamlit
-    if len(sys.argv) > 1:
-        input_video = sys.argv[1].strip()  # Get the file path from the argument
-        print(f"Processing video: {input_video}")
-    else:
-        # Prompt the user for the video file path or URL
-        video_input = input("Enter the path to the video file or a URL: ").strip()
+    parser = argparse.ArgumentParser(description="Process a video to remove filler words.")
+    parser.add_argument("input_video", help="Path to the input video file or URL")
+    parser.add_argument("--filler-words", type=str, default="", help="Comma-separated filler words to remove")
 
-        # Determine if the input is a URL or a file path
-        if video_input.startswith(('http://', 'https://')):
-            # Download the video from the URL
-            input_video = "downloaded_video.mp4"
-            download_video_from_url(video_input, input_video)
-        else:
-            # Use the provided file path
-            input_video = video_input
-
-    output_video = "output_trimmed.mp4"
+    args = parser.parse_args()
+    
+    input_video = args.input_video
+    filler_words = [word.strip().lower() for word in args.filler_words.split(",") if word.strip()]
+    
+    print(f"Processing video: {input_video}")
+    print(f"Filler words to filter: {filler_words}")
 
     # Clean old debug logs, SRTs, and output
     if os.path.exists(DEBUG_LOG_FILE):
