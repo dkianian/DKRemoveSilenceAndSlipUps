@@ -13,20 +13,8 @@ import sys
 import streamlit as st
 import tempfile
 
-# Set up page title
-st.set_page_config(page_title="Automated Video Editor", layout="wide")
-
-# Title and description
-st.title("Automated Video Editor")
-st.markdown("This tool allows you to process a video by removing user-selected filler words and silent portions.")
-
-# Upload a file or provide a URL
-uploaded_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi", "mkv"])
-video_url = st.text_input("Or enter a video URL:")
-
-# Get user input for filler words
-filler_words_input = st.text_input("Enter filler words to remove (comma-separated):")
-filler_words = [word.strip().lower() for word in filler_words_input.split(",") if word.strip()]
+# Check if the script is running in Streamlit
+RUNNING_IN_STREAMLIT = "streamlit" in sys.argv[0]
 
 # Ensure ffmpeg is in PATH
 os.environ["PATH"] += os.pathsep + "/usr/local/bin"  
@@ -44,6 +32,24 @@ def write_progress(progress):
 DEBUG_LOG_FILE = "debug_log.txt"
 
 whisper_model = whisper.load_model("base")
+
+def streamlit_ui():
+    st.title("Don Kianian's Automated Video Processing Tool")
+    st.markdown("This tool allows you to process a video by removing user-selected words and silence.")
+    
+    # File uploader for video
+    uploaded_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi", "mkv"])
+    
+    # Text input for video URL
+    video_url = st.text_input("Or enter a video URL (leave blank if uploading a file)")
+    
+    # Text input for filler words (comma-separated)
+    filler_words_input = st.text_input("Enter filler words to remove (comma-separated)", "")
+    filler_words = [word.strip().lower() for word in filler_words_input.split(",") if word.strip()]
+
+    # Run button
+    if st.button("Process Video"):
+        main(uploaded_file, video_url, filler_words_input)  # Call main() with user inputs
 
 def log_debug(message):
     """Log a debug message to a file."""
@@ -245,9 +251,9 @@ def generate_srt(transcription, output_srt_path):
             srt_file.write(f"{start_time_srt} --> {end_time_srt}\n")
             srt_file.write(f"{text}\n\n")
 
-def main():
+def main(uploaded_file, video_url, filler_words_input):
     # Check if a file path argument was passed from Streamlit
-    if uploaded_file:
+    if uploaded_file is not None:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_file:
             temp_file.write(uploaded_file.read())
             input_video = temp_file.name
@@ -278,7 +284,7 @@ def main():
     progress_bar = st.session_state.progress_bar
 
     # Step 1: Get filler words to filter out
-    filler_words = get_filler_words(filler_words_input)
+    filler_words = get_filler_words(filler_words_input.strip()) if filler_words_input else []
     log_debug(f"Filler words to filter out: {filler_words}")
 
     # Step 2: Load the video
@@ -350,4 +356,4 @@ def main():
     print("Video loaded successfully.")
 
 if __name__ == "__main__":
-    main()
+    streamlit_ui()
