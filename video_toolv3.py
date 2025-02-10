@@ -123,14 +123,18 @@ def detect_non_silent_intervals(audio_path, top_db=40):
 def transcribe_audio(audio_path, model):
     """Transcribe the audio using OpenAI Whisper."""
     result = model.transcribe(audio_path, word_timestamps=True)
-    if "segments" not in result or not result["segments"]:
-        print("Error: No segments found in transcription.")
+
+    if not result or "segments" not in result or result["segments"] is None:
+        st.error("Error: Whisper failed to generate transcription segments.")
+        log_debug("ERROR: No segments found in transcription. Possible empty audio or model failure.")
         return []
+
     words_only = [
         {"word": word["word"], "start": word["start"], "end": word["end"]}
-        for segment in result["segments"] if "words" in segment
+        for segment in result["segments"] if "words" in segment and segment["words"] is not None
         for word in segment["words"]
     ]
+
     for word_data in words_only:
         log_debug(f"DEBUG - Transcribed Word: {word_data['word']} ({word_data['start']}s - {word_data['end']}s)")
     log_debug("DEBUG: Transcription Output:")
@@ -202,14 +206,9 @@ def trim_video_and_audio(video_clip, non_silent_times, output_video_path):
     final_clip.write_videofile(output_video_path, codec="libx264", audio_codec="aac")
     return output_video_path
 
-def get_filler_words():
-    """Prompt the user for filler words, using Streamlit if available."""
-    if "streamlit" in sys.modules:
-        filler_input = st.text_input("Enter filler words to filter out (comma-separated):", "")
-    else:
-        filler_input = input("What word(s) would you like to filter out? Separate each word with a comma: ")
-
-    return [word.strip().lower() for word in filler_input.split(",")] if filler_input.strip() else []
+def get_filler_words(filler_words_input):
+    """Process filler words input from Streamlit or CLI."""
+    return [word.strip().lower() for word in filler_words_input.split(",")] if filler_words_input.strip() else []
 
 def merge_intervals(intervals):
     """Merge overlapping or adjacent intervals."""
@@ -274,15 +273,17 @@ def main():
     
     # Initialize progress
     write_progress(0)
-    progress_bar = st.progress(0)
+    if "progress_bar" not in st.session_state:
+        st.session_state.progress_bar = st.progress(0)  # Create a single instance
+    progress_bar = st.session_state.progress_bar
 
     # Step 1: Get filler words to filter out
-    filler_words = get_filler_words()
+    filler_words = get_filler_words(filler_words_input)
     log_debug(f"Filler words to filter out: {filler_words}")
 
     # Step 2: Load the video
     video_clip = load_video(input_video)
-    progress_bar = st.progress(10)  # 10% progress
+    progress_bar.progress(10)  # 10% progress
     print("Video loaded successfully.")
 
     # Step 3: Extract audio from the unmodified video
@@ -290,14 +291,14 @@ def main():
 
     # Step 4: Transcribe the audio to detect filler words
     words = transcribe_audio(audio_path, whisper_model)
-    progress_bar = st.progress(20)  # 20% progress
+    progress_bar.progress(20)  # 20% progress
     print("Audio transcribed successfully.")
 
     # Step 5: Generate SRT transcript for the input video
     input_srt_path = "input_transcript.srt"
     generate_srt(words, input_srt_path)
     log_debug(f"DEBUG: Input video transcript saved to: {input_srt_path}")
-    progress_bar = st.progress(25)  # 25% progress
+    progress_bar.progress(25)  # 25% progress
     print("Input video SRT generated successfully.")
 
     # Step 6: Detect filler words in the unmodified video
@@ -309,14 +310,14 @@ def main():
         # Step 7: Replace filler words with silence in the audio (with buffer)
         modified_audio_path = "temp_modified_audio.wav"
         replace_filler_words_with_silence(audio_path, filler_intervals, modified_audio_path, buffer=0.01)
-        progress_bar = st.progress(40)  # 40% progress
+        progress_bar.progress(40)  # 40% progress
         print("Replacing filler words...")
         # Step 8: Detect non-silent intervals in the modified audio
         non_silent_times = detect_non_silent_intervals(modified_audio_path)
         
         # Step 9: Trim the video and audio to remove the silent segments
         final_video_path = trim_video_and_audio(video_clip, non_silent_times, output_video)
-        progress_bar = st.progress(50)  # 50% progress
+        progress_bar.progress(50)  # 50% progress
         print("Removing filler words...")
         log_debug(f"Filler words removed. Final video saved to: {final_video_path}")
     else:
@@ -326,11 +327,11 @@ def main():
     # Step 10: Generate SRT transcript for the output trimmed video
     output_audio_path = "temp_output_audio.wav"
     extract_audio(load_video(final_video_path), output_audio_path)
-    output_words = transcribe_audio(output_audio_path)
+    output_words = transcribe_audio(output_audio_path, model=whisper_model)
     output_srt_path = "output_transcript.srt"
     generate_srt(output_words, output_srt_path)
     log_debug(f"DEBUG: Output video transcript saved to: {output_srt_path}")
-    progress_bar = st.progress(80)  # 80% progress
+    progress_bar.progress(80)  # 80% progress
     print("Generating final video and output SRT...")
 
     # Clean up temporary files
@@ -339,13 +340,13 @@ def main():
         os.remove("temp_modified_audio.wav")
     if os.path.exists("temp_output_audio.wav"):
         os.remove("temp_output_audio.wav")
-    progress_bar = st.progress(90)  # 90% progress
+    progress_bar.progress(90)  # 90% progress
     print("Cleaning up temp files...")
 
     print(f"Trimmed video saved to: {final_video_path}")
     print(f"Debug log saved to: {DEBUG_LOG_FILE}")
     consolidate_debug_log(DEBUG_LOG_FILE, "consolidated_debug_log.txt")
-    progress_bar = st.progress(100)  # 100% progress
+    progress_bar.progress(100)  # 100% progress
     print("Video loaded successfully.")
 
 if __name__ == "__main__":
