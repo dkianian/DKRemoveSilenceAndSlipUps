@@ -18,10 +18,15 @@ import imageio_ffmpeg
 # Check if the script is running in Streamlit
 RUNNING_IN_STREAMLIT = "streamlit" in sys.argv[0]
 
-# Ensure ffmpeg is in PATH
-ffmpeg_path = imageio_ffmpeg.get_ffmpeg_path()
-os.environ["PATH"] += os.pathsep + os.path.dirname(ffmpeg_path)
-print(f"FFmpeg path: {ffmpeg_path}")  
+# Ensure FFmpeg is available
+ffmpeg_path = shutil.which("ffmpeg")
+
+if ffmpeg_path:
+    os.environ["PATH"] += os.pathsep + os.path.dirname(ffmpeg_path)
+    print(f"Using FFmpeg from: {ffmpeg_path}")
+else:
+    raise FileNotFoundError("FFmpeg is not installed. Ensure ffmpeg-static is included in requirements.txt.")
+  
 from pydub import AudioSegment
 # AudioSegment.converter = "/usr/local/bin/ffmpeg"  # Set ffmpeg path
 # Progress file to communicate with Streamlit
