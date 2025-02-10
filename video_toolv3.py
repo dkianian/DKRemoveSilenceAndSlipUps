@@ -1,8 +1,8 @@
 import os
 # ✅ Fix PyTorch watcher error in Streamlit
 os.environ["TORCH_USE_RTLD_GLOBAL"] = "1"
-# ✅ Disable Streamlit's file watcher to prevent interference with PyTorch
-os.environ["STREAMLIT_WATCH_FILE"] = "false"
+# ✅ Ensure Streamlit does NOT track file changes
+os.environ["STREAMLIT_DISABLE_FILE_WATCHER"] = "true"
 from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips, concatenate_audioclips
 from pydub import AudioSegment
 from pydub.silence import split_on_silence

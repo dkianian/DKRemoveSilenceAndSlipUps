@@ -1,0 +1,12 @@
+[server]
+runOnSave = false
+
+[logger]
+level = "error"
+
+[runner]
+magicEnabled = false
+
+[global]
+disableWatcher = true
+
