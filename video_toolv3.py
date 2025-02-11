@@ -51,7 +51,7 @@ def write_progress(progress):
 # Debug log file
 DEBUG_LOG_FILE = "debug_log.txt"
 
-whisper_model = whisper.load_model("tiny")
+whisper_model = whisper.load_model("base")
 
 def streamlit_ui():
     st.title("Don Kianian's Automated Video Editor")
