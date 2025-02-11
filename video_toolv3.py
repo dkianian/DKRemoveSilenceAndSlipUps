@@ -22,23 +22,15 @@ import imageio_ffmpeg
 import time 
 from datetime import timedelta
 import threading
+import torch
 
 # Check if the script is running in Streamlit
 RUNNING_IN_STREAMLIT = "streamlit" in sys.argv[0]
 
 # Ensure FFmpeg is available
 ffmpeg_path = shutil.which("ffmpeg")
-
-#if ffmpeg_path:
-#    os.environ["PATH"] += os.pathsep + os.path.dirname(ffmpeg_path)
-#    print(f"Using FFmpeg from: {ffmpeg_path}")
-#else:
-#    print("❌ FFmpeg is NOT installed. Checking system paths...")
-#    print(os.environ["PATH"])  # Debug: print system PATH for verification
-#    raise FileNotFoundError("FFmpeg is not installed. Ensure ffmpeg-static is included in requirements.txt.")
   
 from pydub import AudioSegment
-# AudioSegment.converter = "/usr/local/bin/ffmpeg"  # Set ffmpeg path
 # Progress file to communicate with Streamlit
 PROGRESS_FILE = "progress.txt"
 if shutil.which("ffmpeg") is None:
@@ -175,7 +167,6 @@ def detect_non_silent_intervals(audio_path, top_db=40):
     non_silent_times = [(start / sr, end / sr) for start, end in non_silent_intervals]
     return non_silent_times
 
-import torch
 def transcribe_audio(audio_path, model):
     """Transcribe the audio using OpenAI Whisper."""
     result = model.transcribe(audio_path, word_timestamps=True)
@@ -204,13 +195,29 @@ def transcribe_audio(audio_path, model):
         log_debug(json.dumps(segment, indent=2))
     return result["segments"]
 
-def transcribe_audio_background(audio_path, model):
+# def transcribe_audio_background(audio_path, model):
     """Run transcription in a background thread."""
     try:
         st.session_state.transcription_result = model.transcribe(audio_path, word_timestamps=True)
     except Exception as e:
         st.error(f"Transcription failed: {e}")
         st.session_state.transcription_result = None
+
+def transcribe_audio_async(audio_path, model, result_container):
+    """Run Whisper transcription in a separate thread."""
+    result_container["result"] = transcribe_audio(audio_path, model)
+
+def transcribe_audio_threaded(audio_path, model):
+    """Start transcription in a separate thread and show progress."""
+    result_container = {"result": None}
+    thread = threading.Thread(target=transcribe_audio_async, args=(audio_path, model, result_container))
+    thread.start()
+
+    # Wait for transcription to finish
+    with st.spinner("Transcribing audio... This may take a while."):
+        thread.join()  # Block until transcription is done
+
+    return result_container["result"]
 
 def detect_filler_words(words, filler_words):
     """Detect filler words in the transcription."""
@@ -366,12 +373,12 @@ def main(uploaded_file, video_url, filler_words_input):
     st.session_state.current_step = "Loading video..."
     with st.spinner("Loading video..."):
         video_clip = load_video(input_video)
-    progress_bar.progress(10)  # 10% progress
+    progress_bar.progress(5)  # 5% progress
     print("Video loaded successfully.")
 
     # Update time elapsed and remaining
     elapsed_time = time.time() - start_time
-    estimated_total_time = elapsed_time / 0.1  # Assuming 10% progress
+    estimated_total_time = elapsed_time / 0.05  # Assuming 5% progress
     remaining_time = estimated_total_time - elapsed_time
     time_elapsed_placeholder.text(f"Time Elapsed: {timedelta(seconds=int(elapsed_time))}")
     time_remaining_placeholder.text(f"Estimated Time Remaining: {timedelta(seconds=int(remaining_time))}")
@@ -380,12 +387,12 @@ def main(uploaded_file, video_url, filler_words_input):
     st.session_state.current_step = "Extracting audio..."
     with st.spinner("Extracting audio..."):
         audio_path = extract_audio(video_clip)
-    progress_bar.progress(15)  # 15% progress
+    progress_bar.progress(10)  # 10% progress
     print("Audio extracted")
 
     # Update time elapsed and remaining
     elapsed_time = time.time() - start_time
-    estimated_total_time = elapsed_time / 0.15  # Assuming 15% progress
+    estimated_total_time = elapsed_time / 0.10  # Assuming 10% progress
     remaining_time = estimated_total_time - elapsed_time
     time_elapsed_placeholder.text(f"Time Elapsed: {timedelta(seconds=int(elapsed_time))}")
     time_remaining_placeholder.text(f"Estimated Time Remaining: {timedelta(seconds=int(remaining_time))}")
@@ -394,7 +401,7 @@ def main(uploaded_file, video_url, filler_words_input):
     st.session_state.current_step = "Transcribing audio..."
     with st.spinner("Transcribing audio..."):
         # Run transcription in a background thread
-        transcription_thread = threading.Thread(target=transcribe_audio_background, args=(audio_path, whisper_model))
+        transcription_thread = threading.Thread(target=transcribe_audio_threaded, args=(audio_path, whisper_model))
         transcription_thread.start()
 
         # Wait for transcription to complete
@@ -410,7 +417,8 @@ def main(uploaded_file, video_url, filler_words_input):
         st.error("Transcription failed. Please check the audio file and try again.")
         st.stop()
 
-    words = transcription_result["segments"]
+    words = transcribe_audio_threaded(audio_path, whisper_model)
+
     progress_bar.progress(30)  # 30% progress
     print("Audio transcribed successfully.")
 
