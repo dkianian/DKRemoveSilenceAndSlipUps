@@ -21,6 +21,7 @@ import subprocess
 import imageio_ffmpeg
 import time 
 from datetime import timedelta
+import threading
 
 # Check if the script is running in Streamlit
 RUNNING_IN_STREAMLIT = "streamlit" in sys.argv[0]
@@ -50,7 +51,7 @@ def write_progress(progress):
 # Debug log file
 DEBUG_LOG_FILE = "debug_log.txt"
 
-whisper_model = whisper.load_model("base")
+whisper_model = whisper.load_model("tiny")
 
 def streamlit_ui():
     st.title("Don Kianian's Automated Video Editor")
@@ -193,6 +194,14 @@ def transcribe_audio(audio_path, model):
     for segment in result["segments"]:
         log_debug(json.dumps(segment, indent=2))
     return result["segments"]
+
+def transcribe_audio_background(audio_path, model):
+    """Run transcription in a background thread."""
+    try:
+        st.session_state.transcription_result = model.transcribe(audio_path, word_timestamps=True)
+    except Exception as e:
+        st.error(f"Transcription failed: {e}")
+        st.session_state.transcription_result = None
 
 def detect_filler_words(words, filler_words):
     """Detect filler words in the transcription."""
@@ -375,9 +384,23 @@ def main(uploaded_file, video_url, filler_words_input):
     # Step 4: Transcribe the audio to detect filler words
     st.session_state.current_step = "Transcribing audio..."
     with st.spinner("Transcribing audio..."):
-        words = transcribe_audio(audio_path, whisper_model)
-    progress_bar.progress(30)  # 30% progress
-    print("Audio transcribed successfully.")
+        # Run transcription in a background thread
+        transcription_thread = threading.Thread(target=transcribe_audio_background, args=(audio_path, whisper_model))
+        transcription_thread.start()
+
+        # Wait for transcription to complete
+        while transcription_thread.is_alive():
+            time.sleep(1)  # Check every second
+            st.write("Transcription in progress...")
+
+        transcription_thread.join()
+
+    # Get transcription result
+    if st.session_state.transcription_result is None:
+        st.error("Transcription failed. Please check the audio file and try again.")
+        st.stop()
+
+    words = st.session_state.transcription_result["segments"]
 
     # Update time elapsed and remaining
     elapsed_time = time.time() - start_time
