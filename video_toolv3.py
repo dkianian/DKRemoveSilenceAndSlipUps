@@ -51,7 +51,7 @@ def write_progress(progress):
 # Debug log file
 DEBUG_LOG_FILE = "debug_log.txt"
 
-whisper_model = whisper.load_model("base")
+whisper_model = whisper.load_model("tiny.en")
 
 def streamlit_ui():
     st.title("Don Kianian's Automated Video Editor")
@@ -175,9 +175,16 @@ def detect_non_silent_intervals(audio_path, top_db=40):
     non_silent_times = [(start / sr, end / sr) for start, end in non_silent_intervals]
     return non_silent_times
 
+import torch
 def transcribe_audio(audio_path, model):
     """Transcribe the audio using OpenAI Whisper."""
     result = model.transcribe(audio_path, word_timestamps=True)
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"  # Force CPU if no GPU
+    model = model.to(device)  # Move model to the CPU
+
+    print("Starting transcription... (this may take time on CPU)")
+    result = model.transcribe(audio_path, fp16=False)  # Force FP32 for CPU stability
 
     if not result or "segments" not in result or result["segments"] is None:
         st.error("Error: Whisper failed to generate transcription segments.")
