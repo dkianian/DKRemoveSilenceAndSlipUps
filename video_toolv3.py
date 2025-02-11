@@ -72,6 +72,7 @@ def streamlit_ui():
         st.session_state.processing = False
         st.session_state.start_time = None
         st.session_state.current_step = ""
+        st.session_state.transcription_result = None # Initialize transcription result
 
     col1, col2 = st.columns(2)  # Arrange buttons side by side
 
@@ -89,6 +90,7 @@ def streamlit_ui():
             st.session_state.processing = False
             st.session_state.start_time = None
             st.session_state.current_step = ""
+            st.session_state.transcription_result = None # Reset transcription result
             st.experimental_rerun()
 
     # Display processing status if running
@@ -391,16 +393,19 @@ def main(uploaded_file, video_url, filler_words_input):
         # Wait for transcription to complete
         while transcription_thread.is_alive():
             time.sleep(1)  # Check every second
-            st.write("Transcription in progress...")
+        st.write("Transcription in progress...")
 
         transcription_thread.join()
 
     # Get transcription result
+    transcription_result = st.session_state.get("transcription_result")
     if st.session_state.transcription_result is None:
         st.error("Transcription failed. Please check the audio file and try again.")
         st.stop()
 
-    words = st.session_state.transcription_result["segments"]
+    words = transcription_result["segments"]
+    progress_bar.progress(30)  # 30% progress
+    print("Audio transcribed successfully.")
 
     # Update time elapsed and remaining
     elapsed_time = time.time() - start_time
