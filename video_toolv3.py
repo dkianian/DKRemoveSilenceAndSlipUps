@@ -156,8 +156,8 @@ def download_video_from_url(url, output_path):
         raise Exception(f"Failed to download video from URL. Status code: {response.status_code}")
 
 def extract_audio(video_clip, audio_path="temp_audio.wav"):
-    """Extract audio from a video clip and save it as a WAV file."""
-    video_clip.audio.write_audiofile(audio_path)
+    """Extract audio from a video clip and save it as a file."""
+    video_clip.audio.write_audiofile(audio_path, codec="pcm_s16le", fps=16000)
     return audio_path
 
 def detect_non_silent_intervals(audio_path, top_db=40):
@@ -417,7 +417,7 @@ def main(uploaded_file, video_url, filler_words_input):
         st.error("Transcription failed. Please check the audio file and try again.")
         st.stop()
 
-    words = transcribe_audio_threaded(audio_path, whisper_model)
+    #words = transcribe_audio_threaded(audio_path, whisper_model)
 
     progress_bar.progress(30)  # 30% progress
     print("Audio transcribed successfully.")
