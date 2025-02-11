@@ -22,7 +22,6 @@ import imageio_ffmpeg
 import time 
 from datetime import timedelta
 import threading
-import torch
 
 # Check if the script is running in Streamlit
 RUNNING_IN_STREAMLIT = "streamlit" in sys.argv[0]
@@ -31,6 +30,7 @@ RUNNING_IN_STREAMLIT = "streamlit" in sys.argv[0]
 ffmpeg_path = shutil.which("ffmpeg")
   
 from pydub import AudioSegment
+
 # Progress file to communicate with Streamlit
 PROGRESS_FILE = "progress.txt"
 if shutil.which("ffmpeg") is None:
@@ -156,8 +156,8 @@ def download_video_from_url(url, output_path):
         raise Exception(f"Failed to download video from URL. Status code: {response.status_code}")
 
 def extract_audio(video_clip, audio_path="temp_audio.wav"):
-    """Extract audio from a video clip and save it as a file."""
-    video_clip.audio.write_audiofile(audio_path, codec="pcm_s16le", fps=16000)
+    """Extract audio from a video clip and save it as a WAV file."""
+    video_clip.audio.write_audiofile(audio_path)
     return audio_path
 
 def detect_non_silent_intervals(audio_path, top_db=40):
@@ -170,13 +170,6 @@ def detect_non_silent_intervals(audio_path, top_db=40):
 def transcribe_audio(audio_path, model):
     """Transcribe the audio using OpenAI Whisper."""
     result = model.transcribe(audio_path, word_timestamps=True)
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"  # Force CPU if no GPU
-    model = model.to(device)  # Move model to the CPU
-
-    print("Starting transcription... (this may take time on CPU)")
-    result = model.transcribe(audio_path, fp16=False)  # Force FP32 for CPU stability
-
     if not result or "segments" not in result or result["segments"] is None:
         st.error("Error: Whisper failed to generate transcription segments.")
         log_debug("ERROR: No segments found in transcription. Possible empty audio or model failure.")
@@ -194,30 +187,12 @@ def transcribe_audio(audio_path, model):
     for segment in result["segments"]:
         log_debug(json.dumps(segment, indent=2))
     return result["segments"]
-
-# def transcribe_audio_background(audio_path, model):
     """Run transcription in a background thread."""
     try:
         st.session_state.transcription_result = model.transcribe(audio_path, word_timestamps=True)
     except Exception as e:
         st.error(f"Transcription failed: {e}")
         st.session_state.transcription_result = None
-
-def transcribe_audio_async(audio_path, model, result_container):
-    """Run Whisper transcription in a separate thread."""
-    result_container["result"] = transcribe_audio(audio_path, model)
-
-def transcribe_audio_threaded(audio_path, model):
-    """Start transcription in a separate thread and show progress."""
-    result_container = {"result": None}
-    thread = threading.Thread(target=transcribe_audio_async, args=(audio_path, model, result_container))
-    thread.start()
-
-    # Wait for transcription to finish
-    with st.spinner("Transcribing audio... This may take a while."):
-        thread.join()  # Block until transcription is done
-
-    return result_container["result"]
 
 def detect_filler_words(words, filler_words):
     """Detect filler words in the transcription."""
@@ -401,7 +376,7 @@ def main(uploaded_file, video_url, filler_words_input):
     st.session_state.current_step = "Transcribing audio..."
     with st.spinner("Transcribing audio..."):
         # Run transcription in a background thread
-        transcription_thread = threading.Thread(target=transcribe_audio_threaded, args=(audio_path, whisper_model))
+        transcription_thread = threading.Thread(target=transcribe_audio, args=(audio_path, whisper_model))
         transcription_thread.start()
 
         # Wait for transcription to complete
@@ -417,8 +392,7 @@ def main(uploaded_file, video_url, filler_words_input):
         st.error("Transcription failed. Please check the audio file and try again.")
         st.stop()
 
-    #words = transcribe_audio_threaded(audio_path, whisper_model)
-
+    words = transcription_result["segments"]
     progress_bar.progress(30)  # 30% progress
     print("Audio transcribed successfully.")
 
