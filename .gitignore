@@ -22,3 +22,9 @@ __pycache__/
 *.bin
 
 temp_videos/
+consolidated_debug_log.txt
+debug_log.txt
+.gitignore
+output_transcript.srt
+input_transcript.srt
+.gitignore
