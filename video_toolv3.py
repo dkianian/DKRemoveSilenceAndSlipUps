@@ -27,17 +27,9 @@ RUNNING_IN_STREAMLIT = "streamlit" in sys.argv[0]
 
 # Ensure FFmpeg is available
 ffmpeg_path = shutil.which("ffmpeg")
-
-#if ffmpeg_path:
-#    os.environ["PATH"] += os.pathsep + os.path.dirname(ffmpeg_path)
-#    print(f"Using FFmpeg from: {ffmpeg_path}")
-#else:
-#    print("❌ FFmpeg is NOT installed. Checking system paths...")
-#    print(os.environ["PATH"])  # Debug: print system PATH for verification
-#    raise FileNotFoundError("FFmpeg is not installed. Ensure ffmpeg-static is included in requirements.txt.")
   
 from pydub import AudioSegment
-# AudioSegment.converter = "/usr/local/bin/ffmpeg"  # Set ffmpeg path
+
 # Progress file to communicate with Streamlit
 PROGRESS_FILE = "progress.txt"
 if shutil.which("ffmpeg") is None:
@@ -53,8 +45,8 @@ DEBUG_LOG_FILE = "debug_log.txt"
 whisper_model = whisper.load_model("base")
 
 def streamlit_ui():
-    st.title("Don Kianian's Automated Video Processing Tool")
-    st.markdown("This tool allows you to process a video by removing user-selected words and silence.")
+    st.title("Don Kianian's Automated Video Processing App")
+    st.markdown("This tool allows you to easily and automatically remove user-selected words and silence from a video.")
     
     # File uploader for video
     uploaded_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi", "mkv"])
@@ -71,6 +63,10 @@ def streamlit_ui():
         st.session_state.processing = False
         st.session_state.start_time = None
         st.session_state.current_step = ""
+        st.session_state.final_video_path = None
+        st.session_state.input_srt_path = None
+        st.session_state.output_srt_path = None
+        st.session_state.processing_done = False # Flag to indicate processing is done
 
     # Display processing status if running
     if st.session_state.processing:
@@ -79,25 +75,44 @@ def streamlit_ui():
             elapsed_time = time.time() - st.session_state.start_time
             st.write(f"**Time Elapsed:** {timedelta(seconds=int(elapsed_time))}")
 
-    col1, col2 = st.columns(2)  # Arrange buttons side by side
-
-    # Process Video Button
-    if st.button("Process Video", disabled=st.session_state.processing):
-        st.session_state.processing = True
-        st.session_state.start_time = time.time()
-        st.session_state.current_step = "Starting processing..."
-        main(uploaded_file, video_url, filler_words_input)
-
-    # Reset Button
-    if st.button("Reset"):
-        st.session_state.processing = False
-        st.session_state.start_time = None
-        st.session_state.current_step = ""
-        st.experimental_rerun()
+    # Process Video Button (Only show if processing is not done)
+    if not st.session_state.processing_done:
+        if st.button("Process Video", disabled=st.session_state.processing):
+            st.session_state.processing = True
+            st.session_state.start_time = time.time()
+            st.session_state.current_step = "Starting processing..."
+            main(uploaded_file, video_url, filler_words_input)
 
     # Display processing status if running
     if st.session_state.processing and "status_message" in st.session_state:
         st.session_state.status_message.text("Processing video... Please wait.")
+
+    # Step 11: Generate DL Buttons
+    if st.session_state.final_video_path and os.path.exists(st.session_state.final_video_path):
+        with open(st.session_state.final_video_path, "rb") as file:
+            st.download_button(label="Download Trimmed Video", data=file, file_name="output_trimmed.mp4", mime="video/mp4")
+    if st.session_state.input_srt_path and os.path.exists(st.session_state.input_srt_path):
+        with open(st.session_state.input_srt_path, "r") as file:
+            st.download_button(label="Download Original Transcript (SRT)", data=file, file_name="input_transcript.srt", mime="text/plain")
+    if st.session_state.output_srt_path and os.path.exists(st.session_state.output_srt_path):
+        with open(st.session_state.output_srt_path, "r") as file:
+            st.download_button(label="Download Processed Transcript (SRT)", data=file, file_name="output_transcript.srt", mime="text/plain")
+
+    # Mark processing as complete when a processed file exists
+    if st.session_state.final_video_path and os.path.exists(st.session_state.final_video_path):
+        st.session_state.processing_done = True  # Update flag
+
+    # Reset Button (Only show after processing is done)
+    if st.session_state.processing_done:
+        if st.button("Process Another Video"):
+            st.session_state.processing = False
+            st.session_state.processing_done = False
+            st.session_state.start_time = None
+            st.session_state.current_step = ""
+            st.session_state.final_video_path = None
+            st.session_state.input_srt_path = None
+            st.session_state.output_srt_path = None
+            st.rerun()  # Refresh UI
 
 def log_debug(message):
     """Log a debug message to a file."""
@@ -434,16 +449,10 @@ def main(uploaded_file, video_url, filler_words_input):
     progress_bar.progress(100)  # Mark progress as complete
     st.success("Processing complete! Download the final video and transcripts below.")
 
-    # Step 11: Generate DL Buttons
-    if os.path.exists("output_trimmed.mp4"):
-        with open("output_trimmed.mp4", "rb") as file:
-            st.download_button(label="Download Trimmed Video", data=file, file_name="output_trimmed.mp4", mime="video/mp4")
-    if os.path.exists("input_transcript.srt"):
-        with open("input_transcript.srt", "r") as file:
-            st.download_button(label="Download Original Transcript (SRT)", data=file, file_name="input_transcript.srt", mime="text/plain")
-    if os.path.exists("output_transcript.srt"):
-        with open("output_transcript.srt", "r") as file:
-            st.download_button(label="Download Processed Transcript (SRT)", data=file, file_name="output_transcript.srt", mime="text/plain")
+    # Store the file paths in the session state
+    st.session_state.final_video_path = final_video_path
+    st.session_state.input_srt_path = input_srt_path
+    st.session_state.output_srt_path = output_srt_path
 
     # Reset Processing State
     st.session_state.processing = False
