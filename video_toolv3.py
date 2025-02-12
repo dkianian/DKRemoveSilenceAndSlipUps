@@ -45,8 +45,8 @@ DEBUG_LOG_FILE = "debug_log.txt"
 whisper_model = whisper.load_model("base")
 
 def streamlit_ui():
-    st.title("Don Kianian's Automated Video Processing App")
-    st.markdown("This tool allows you to easily and automatically remove user-selected words and silence from a video.")
+    st.title("Don Kianian's AI Video Editing Tool")
+    st.markdown("This tool allows you to easily and automatically remove user-selected words and silence from a video using OpenAI Whisper.")
     
     # File uploader for video
     uploaded_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi", "mkv"])
