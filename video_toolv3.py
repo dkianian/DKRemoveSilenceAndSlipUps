@@ -71,13 +71,6 @@ def streamlit_ui():
         st.session_state.output_srt_path = None
         st.session_state.processing_done = False # Flag to indicate processing is done
 
-    # Display processing status if running
-    if st.session_state.processing:
-        st.write(f"**Current Step:** {st.session_state.current_step}")
-        if st.session_state.start_time:
-            elapsed_time = time.time() - st.session_state.start_time
-            st.write(f"**Time Elapsed:** {timedelta(seconds=int(elapsed_time))}")
-
     # Process Video Button (Only show if processing is not done)
     if not st.session_state.processing_done:
         if st.button("Process Video", disabled=st.session_state.processing):
@@ -94,6 +87,10 @@ def streamlit_ui():
     # Display processing status if running
     if st.session_state.processing and "status_message" in st.session_state:
         st.session_state.status_message.text("Processing video... Please wait.")
+        st.write(f"**Current Step:** {st.session_state.current_step}")
+        if st.session_state.start_time:
+            elapsed_time = time.time() - st.session_state.start_time
+            st.write(f"**Time Elapsed:** {timedelta(seconds=int(elapsed_time))}")
 
     # Step 11: Generate DL Buttons
     if st.session_state.final_video_path and os.path.exists(st.session_state.final_video_path):
@@ -179,11 +176,23 @@ def download_video_from_url(url, output_path):
     try:
         # Handle Google Drive links
         if "drive.google.com" in url:
-            file_id = parse_qs(urlparse(url).query).get('id', [None])[0]
+            # Extract file ID from the URL
+            if "/file/d/" in url:
+                # Example: https://drive.google.com/file/d/FILE_ID/view?usp=sharing
+                file_id = url.split("/file/d/")[1].split("/")[0]
+            elif "id=" in url:
+                # Example: https://drive.google.com/uc?export=download&id=FILE_ID
+                file_id = parse_qs(urlparse(url).query).get('id', [None])[0]
+            else:
+                raise Exception("Invalid Google Drive URL. Could not extract file ID.")
+
             if not file_id:
                 raise Exception("Invalid Google Drive URL. Could not extract file ID.")
+
+            # Construct the direct download URL
             direct_download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
             response = requests.get(direct_download_url, stream=True)
+
             if response.status_code == 200:
                 with open(output_path, 'wb') as file:
                     for chunk in response.iter_content(chunk_size=8192):
@@ -360,7 +369,8 @@ def main(uploaded_file, video_url, filler_words_input):
             input_video = temp_file.name
     elif video_url:
         input_video = "downloaded_video.mp4"
-        download_video_from_url(video_url, input_video)
+        with st.spinner("Downloading video from URL. This may take a while..."):
+            download_video_from_url(video_url, input_video)
     else:
         st.warning("Please upload a video file or enter a URL.")
         st.stop()
