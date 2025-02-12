@@ -21,6 +21,9 @@ import subprocess
 import imageio_ffmpeg
 import time
 from datetime import timedelta
+import pytube
+from pytube import YouTube
+from urllib.parse import urlparse, parse_qs
 
 # Check if the script is running in Streamlit
 RUNNING_IN_STREAMLIT = "streamlit" in sys.argv[0]
@@ -52,7 +55,7 @@ def streamlit_ui():
     uploaded_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi", "mkv"])
     
     # Text input for video URL
-    video_url = st.text_input("Or enter a video URL (leave blank if uploading a file)")
+    video_url = st.text_input("Or enter a publicly-availble video URL (leave blank if uploading a file)")
     
     # Text input for filler words (comma-separated)
     filler_words_input = st.text_input("Enter filler words to remove (comma-separated)", "")
@@ -81,7 +84,12 @@ def streamlit_ui():
             st.session_state.processing = True
             st.session_state.start_time = time.time()
             st.session_state.current_step = "Starting processing..."
-            main(uploaded_file, video_url, filler_words_input)
+            try:
+                main(uploaded_file, video_url, filler_words_input)
+            except Exception as e:
+                st.error(f"Error processing video: {e}")
+                st.session_state.processing = False
+                st.session_state.current_step = "Error occurred."
 
     # Display processing status if running
     if st.session_state.processing and "status_message" in st.session_state:
@@ -167,15 +175,45 @@ def load_video(video_path):
     return VideoFileClip(video_path)
 
 def download_video_from_url(url, output_path):
-    """Download a video from a URL and save it to the specified path."""
-    response = requests.get(url, stream=True)
-    if response.status_code == 200:
-        with open(output_path, 'wb') as file:
-            for chunk in response.iter_content(chunk_size=1024):
-                file.write(chunk)
-        print(f"Video downloaded and saved to: {output_path}")
-    else:
-        raise Exception(f"Failed to download video from URL. Status code: {response.status_code}")
+    """Download a video from a URL (Google Drive, YouTube, or direct link)."""
+    try:
+        # Handle Google Drive links
+        if "drive.google.com" in url:
+            file_id = parse_qs(urlparse(url).query).get('id', [None])[0]
+            if not file_id:
+                raise Exception("Invalid Google Drive URL. Could not extract file ID.")
+            direct_download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+            response = requests.get(direct_download_url, stream=True)
+            if response.status_code == 200:
+                with open(output_path, 'wb') as file:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        file.write(chunk)
+                print(f"Google Drive video downloaded and saved to: {output_path}")
+            else:
+                raise Exception(f"Failed to download Google Drive video. Status code: {response.status_code}")
+
+        # Handle YouTube links
+        elif "youtube.com" in url or "youtu.be" in url:
+            yt = YouTube(url)
+            stream = yt.streams.filter(progressive=True, file_extension='mp4').first()
+            if not stream:
+                raise Exception("No suitable video stream found on YouTube.")
+            stream.download(filename=output_path)
+            print(f"YouTube video downloaded and saved to: {output_path}")
+
+        # Handle direct links (e.g., MP4 files)
+        else:
+            response = requests.get(url, stream=True)
+            if response.status_code == 200:
+                with open(output_path, 'wb') as file:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        file.write(chunk)
+                print(f"Video downloaded and saved to: {output_path}")
+            else:
+                raise Exception(f"Failed to download video from URL. Status code: {response.status_code}")
+
+    except Exception as e:
+        raise Exception(f"Error downloading video: {e}")
 
 def extract_audio(video_clip, audio_path="temp_audio.wav"):
     """Extract audio from a video clip and save it as a WAV file."""
