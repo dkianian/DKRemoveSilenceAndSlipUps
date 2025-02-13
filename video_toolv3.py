@@ -81,7 +81,7 @@ def streamlit_ui():
             st.session_state.processing = True
             st.session_state.start_time = time.time()
             st.session_state.current_step = "Starting processing..."
-            st.rerun()  # Refresh UI
+            #st.rerun()  # Refresh UI
         
     # If processing state is set, run the main function
         if st.session_state.processing and not st.session_state.processing_done:
@@ -118,6 +118,9 @@ def streamlit_ui():
 
     # Reset Button (Only show after processing is done)
     if st.session_state.processing_done:
+        st.session_state.processing = False
+        st.session_state.start_time = None
+        st.session_state.current_step = ""
         if st.button("Process Another Video"):
             st.session_state.processing = False
             st.session_state.processing_done = False
