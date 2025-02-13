@@ -61,6 +61,10 @@ def streamlit_ui():
     filler_words_input = st.text_input("Enter filler words to remove (comma-separated)", "")
     filler_words = [word.strip().lower() for word in filler_words_input.split(",") if word.strip()]
 
+    # Initialize filler word count
+    if "filler_words_count" not in st.session_state:
+        st.session_state.filler_words_count = 0
+
     # Persistent Buttons with Session State
     if "processing" not in st.session_state:
         st.session_state.processing = False
@@ -492,7 +496,7 @@ def main(uploaded_file, video_url, filler_words_input):
     st.session_state.current_step = "Detecting filler words..."
     if filler_words:
         with st.spinner("Detecting filler words..."):
-            filler_words_count, filler_intervals = detect_filler_words(words, filler_words)
+            st.session_state.filler_words_count, filler_intervals = detect_filler_words(words, filler_words)
             filler_intervals = merge_intervals(filler_intervals)
         progress_bar.progress(30)  # 30% progress
         log_debug(f"DEBUG: Filler words detected")
@@ -555,7 +559,7 @@ def main(uploaded_file, video_url, filler_words_input):
     write_progress(100)
     # Final UI Updates After Processing Completes
     progress_bar.progress(100)  # Mark progress as complete
-    st.success(f"Processing complete! Download the final video and transcripts below. {filler_words_count} filler words removed.")
+    st.success(f"Processing complete! Download the final video and transcripts below. {st.session_state.filler_words_count} filler words removed.")
 
     # Store the file paths in the session state
     st.session_state.final_video_path = final_video_path
