@@ -77,12 +77,18 @@ def streamlit_ui():
             st.session_state.processing = True
             st.session_state.start_time = time.time()
             st.session_state.current_step = "Starting processing..."
+            st.rerun()  # Refresh UI
+        
+    # If processing state is set, run the main function
+        if st.session_state.processing and not st.session_state.processing_done:
             try:
                 main(uploaded_file, video_url, filler_words_input)
+                st.session_state.processing_done = True  # Mark as done
             except Exception as e:
                 st.error(f"Error processing video: {e}")
-                st.session_state.processing = False
-                st.session_state.current_step = "Error occurred."
+            finally:
+                st.session_state.processing = False  # Reset processing flag
+                #st.rerun()  # Refresh UI to update button states
 
     # Display processing status & disable Process Video button when running
     if st.session_state.processing:
@@ -307,6 +313,7 @@ def transcribe_audio(audio_path, model):
 def detect_filler_words(words, filler_words):
     """Detect filler words in the transcription."""
     filler_intervals = []
+    filler_words_count = 0
     filler_words = [word.strip().lower() for word in filler_words]
     log_debug(f"DEBUG: Filler words to detect: {filler_words}")
     detected_any = False
@@ -321,12 +328,13 @@ def detect_filler_words(words, filler_words):
                 start_time = word["start"]
                 end_time = word["end"]
                 filler_intervals.append((start_time, end_time))
+                filler_words_count += 1
                 detected_any = True
                 log_debug(f"Detected filler word: {word_text} ({start_time}s - {end_time}s)")
     if not detected_any:
         log_debug("WARNING: No filler words detected in transcription. Check Whisper output.")
     log_debug(f"DEBUG: Detected filler intervals: {filler_intervals}")
-    return filler_intervals
+    return filler_words_count, filler_intervals
 
 def replace_filler_words_with_silence(audio_path, filler_intervals, output_audio_path, buffer=0.01):
     """
@@ -484,7 +492,7 @@ def main(uploaded_file, video_url, filler_words_input):
     st.session_state.current_step = "Detecting filler words..."
     if filler_words:
         with st.spinner("Detecting filler words..."):
-            filler_intervals = detect_filler_words(words, filler_words)
+            filler_words_count, filler_intervals = detect_filler_words(words, filler_words)
             filler_intervals = merge_intervals(filler_intervals)
         progress_bar.progress(30)  # 30% progress
         log_debug(f"DEBUG: Filler words detected")
@@ -547,7 +555,7 @@ def main(uploaded_file, video_url, filler_words_input):
     write_progress(100)
     # Final UI Updates After Processing Completes
     progress_bar.progress(100)  # Mark progress as complete
-    st.success("Processing complete! Download the final video and transcripts below.")
+    st.success(f"Processing complete! Download the final video and transcripts below. {filler_words_count} filler words removed.")
 
     # Store the file paths in the session state
     st.session_state.final_video_path = final_video_path
