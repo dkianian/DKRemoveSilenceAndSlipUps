@@ -84,9 +84,8 @@ def streamlit_ui():
                 st.session_state.processing = False
                 st.session_state.current_step = "Error occurred."
 
-    # Display processing status if running
-    if st.session_state.processing and "status_message" in st.session_state:
-        st.session_state.status_message.text("Processing video... Please wait.")
+    # Display processing status & disable Process Video button when running
+    if st.session_state.processing:
         st.write(f"**Current Step:** {st.session_state.current_step}")
         if st.session_state.start_time:
             elapsed_time = time.time() - st.session_state.start_time
@@ -167,6 +166,20 @@ def consolidate_debug_log(input_file, output_file):
         outfile.writelines(consolidated_lines)
     print(f"Consolidated debug log saved to: {output_file}")
 
+def is_video_file_valid(file_path):
+    """Check if the video file is valid using FFmpeg."""
+    try:
+        # Use FFmpeg to probe the file
+        command = [ffmpeg_path, "-v", "error", "-i", file_path, "-f", "null", "-"]
+        result = subprocess.run(command, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"FFmpeg error: {result.stderr}")
+            return False
+        return True
+    except Exception as e:
+        print(f"Error validating video file: {e}")
+        return False
+
 def load_video(video_path):
     """Load a video file using moviepy."""
     return VideoFileClip(video_path)
@@ -191,13 +204,34 @@ def download_video_from_url(url, output_path):
 
             # Construct the direct download URL
             direct_download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-            response = requests.get(direct_download_url, stream=True)
+            # Use a session to handle cookies and redirects
+            session = requests.Session()
+            response = session.get(direct_download_url, stream=True)
+            print(f"Final download URL: {response.url}")
+
+            # Check if Google Drive is serving a confirmation page
+            if "confirm=" in response.url:
+                # Extract the confirmation token
+                confirm_token = re.search(r"confirm=([^&]+)", response.url).group(1)
+                # Construct the confirmed download URL
+                confirmed_download_url = f"https://drive.google.com/uc?export=download&id={file_id}&confirm={confirm_token}"
+                response = session.get(confirmed_download_url, stream=True)
 
             if response.status_code == 200:
                 with open(output_path, 'wb') as file:
                     for chunk in response.iter_content(chunk_size=8192):
-                        file.write(chunk)
-                print(f"Google Drive video downloaded and saved to: {output_path}")
+                        if chunk:  # Filter out keep-alive chunks
+                            file.write(chunk)
+                print(f"Google Drive video downloaded and saved to: {os.path.abspath(output_path)}")
+
+                # Log the file size
+                file_size = os.path.getsize(output_path)
+                print(f"Downloaded file size: {file_size} bytes")
+
+                # Validate the downloaded file
+                if not is_video_file_valid(output_path):
+                    os.remove(output_path)  # Delete the invalid file
+                    raise Exception("Downloaded file is not a valid video.")
             else:
                 raise Exception(f"Failed to download Google Drive video. Status code: {response.status_code}")
 
@@ -210,6 +244,11 @@ def download_video_from_url(url, output_path):
             stream.download(filename=output_path)
             print(f"YouTube video downloaded and saved to: {output_path}")
 
+            # Validate the downloaded file
+            if not is_video_file_valid(output_path):
+                os.remove(output_path)  # Delete the invalid file
+                raise Exception("Downloaded file is not a valid video.")
+
         # Handle direct links (e.g., MP4 files)
         else:
             response = requests.get(url, stream=True)
@@ -218,11 +257,18 @@ def download_video_from_url(url, output_path):
                     for chunk in response.iter_content(chunk_size=8192):
                         file.write(chunk)
                 print(f"Video downloaded and saved to: {output_path}")
+            
+            # Validate the downloaded file
+                if not is_video_file_valid(output_path):
+                    os.remove(output_path)  # Delete the invalid file
+                    raise Exception("Downloaded file is not a valid video.")
             else:
                 raise Exception(f"Failed to download video from URL. Status code: {response.status_code}")
 
     except Exception as e:
         raise Exception(f"Error downloading video: {e}")
+    
+    print(f"Downloaded file size: {os.path.getsize(output_path)} bytes")
 
 def extract_audio(video_clip, audio_path="temp_audio.wav"):
     """Extract audio from a video clip and save it as a WAV file."""
@@ -374,6 +420,12 @@ def main(uploaded_file, video_url, filler_words_input):
     else:
         st.warning("Please upload a video file or enter a URL.")
         st.stop()
+
+    # Validate the video file
+    if not is_video_file_valid(input_video):
+        st.error("The downloaded file is not a valid video. Please check the URL and try again.")
+        st.stop()
+
     output_video = "output_trimmed.mp4"
 
     # Clean old debug logs, SRTs, and output
@@ -442,7 +494,7 @@ def main(uploaded_file, video_url, filler_words_input):
         st.session_state.current_step = "Removing filler words..."
         with st.spinner("Removing filler words..."):
             modified_audio_path = "temp_modified_audio.wav"
-            replace_filler_words_with_silence(audio_path, filler_intervals, modified_audio_path, buffer=0.01)
+            replace_filler_words_with_silence(audio_path, filler_intervals, modified_audio_path, buffer=0.015)
             progress_bar.progress(50)  # 50% progress
             log_debug("Filler words removed.")
             print("Removed filler words...")
