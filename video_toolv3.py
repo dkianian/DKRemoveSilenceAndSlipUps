@@ -131,7 +131,7 @@ def streamlit_ui():
             st.session_state.output_srt_path = None
             st.rerun()  # Refresh UI
 
-def main(uploaded_file, video_url, filler_words_input):
+def main(uploaded_file, filler_words_input, video_url=""):
     # Check if a file path argument was passed from Streamlit
     if uploaded_file is not None:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_file:
