@@ -55,7 +55,7 @@ def streamlit_ui():
     uploaded_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi", "mkv"])
     
     # Text input for video URL
-    video_url = st.text_input("Or enter a publicly-availble video URL (leave blank if uploading a file)")
+#    video_url = st.text_input("Or enter a publicly-availble video URL (leave blank if uploading a file)")
     
     # Text input for filler words (comma-separated)
     filler_words_input = st.text_input("Enter filler words to remove (comma-separated)", "")
@@ -428,10 +428,10 @@ def main(uploaded_file, video_url, filler_words_input):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_file:
             temp_file.write(uploaded_file.read())
             input_video = temp_file.name
-    elif video_url:
-        input_video = "downloaded_video.mp4"
-        with st.spinner("Downloading video from URL. This may take a while..."):
-            download_video_from_url(video_url, input_video)
+#    elif video_url:
+#        input_video = "downloaded_video.mp4"
+#        with st.spinner("Downloading video from URL. This may take a while..."):
+#            download_video_from_url(video_url, input_video)
     else:
         st.warning("Please upload a video file or enter a URL.")
         st.stop()
