@@ -81,7 +81,8 @@ def streamlit_ui():
             st.session_state.processing = True
             st.session_state.start_time = time.time()
             st.session_state.current_step = "Starting processing..."
-            st.rerun()  # Refresh UI
+            # st.rerun()  # Refresh UI
+            disabled = True
         
     # If processing state is set, run the main function
         if st.session_state.processing and not st.session_state.processing_done:
