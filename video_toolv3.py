@@ -86,7 +86,7 @@ def streamlit_ui():
     # If processing state is set, run the main function
         if st.session_state.processing and not st.session_state.processing_done:
             try:
-                main(uploaded_file, video_url="", filler_words_input)
+                main(uploaded_file, filler_words_input, video_url="")
                 st.session_state.processing_done = True  # Mark as done
             except Exception as e:
                 st.error(f"Error processing video: {e}")
