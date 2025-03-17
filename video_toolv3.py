@@ -45,7 +45,7 @@ def write_progress(progress):
 # Debug log file
 DEBUG_LOG_FILE = "debug_log.txt"
 
-whisper_model = whisper.load_model("base")
+whisper_model = whisper.load_model("medium")
 
 def streamlit_ui():
     st.title("Don Kianian's AI Video Editing Tool")
@@ -440,11 +440,13 @@ def extract_audio(video_clip, audio_path="temp_audio.wav"):
     video_clip.audio.write_audiofile(audio_path)
     return audio_path
 
-def detect_non_silent_intervals(audio_path, top_db=40):
+def detect_non_silent_intervals(audio_path, top_db=30):
     """Detect non-silent intervals in the audio file using librosa."""
     y, sr = librosa.load(audio_path, sr=None)
+    y = librosa.util.normalize(y)
     non_silent_intervals = librosa.effects.split(y, top_db=top_db)
-    non_silent_times = [(start / sr, end / sr) for start, end in non_silent_intervals]
+    non_silent_times = [(start / sr, end / sr) for start, end in non_silent_intervals
+        if (end - start) / sr > 0.5] # e.g. 0.5 seconds minumum duration
     return non_silent_times
 
 def transcribe_audio(audio_path, model):
@@ -495,7 +497,7 @@ def detect_filler_words(words, filler_words):
     log_debug(f"DEBUG: Detected filler intervals: {filler_intervals}")
     return filler_words_count, filler_intervals
 
-def replace_filler_words_with_silence(audio_path, filler_intervals, output_audio_path, buffer=0.01):
+def replace_filler_words_with_silence(audio_path, filler_intervals, output_audio_path, buffer=0.05):
     """
     Replace filler word segments in the audio with silence, with a small buffer added to the intervals.
     
@@ -503,13 +505,13 @@ def replace_filler_words_with_silence(audio_path, filler_intervals, output_audio
     - audio_path: Path to the input audio file.
     - filler_intervals: List of (start, end) tuples representing filler word intervals.
     - output_audio_path: Path to save the modified audio file.
-    - buffer: Time in seconds to extend the start and end of each interval (default: 0.01 seconds).
+    - buffer: Time in seconds to extend the start and end of each interval (default: 0.05 seconds).
     """
     # Load the audio file
     audio = AudioSegment.from_wav(audio_path)
     
     # Iterate over filler intervals and replace them with silence
-    for start, end in filler_intervals:
+    for start, end in sorted(filler_intervals, reverse=True):
         # Add buffer to the start and end of the interval
         start_with_buffer = max(0, start - buffer)  # Ensure start doesn't go below 0
         end_with_buffer = min(len(audio) / 1000, end + buffer)  # Ensure end doesn't exceed audio length
