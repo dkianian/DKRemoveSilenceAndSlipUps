@@ -205,52 +205,55 @@ def main(uploaded_file, filler_words_input, video_url=""):
     progress_bar.progress(25)  # 25% progress
     print("Input video SRT generated successfully.")
 
-    # Step 6: Detect filler words in the unmodified video
-    st.session_state.current_step = "Detecting filler words..."
+# Step 6: Process filler words if provided
+    modified_audio_path = audio_path  # Default to original audio
     if filler_words:
+        # Step 6a: Detect filler words
+        st.session_state.current_step = "Detecting filler words..."
         with st.spinner("Detecting filler words..."):
             st.session_state.filler_words_count, filler_intervals = detect_filler_words(words, filler_words)
             filler_intervals = merge_intervals(filler_intervals)
-        progress_bar.progress(30)  # 30% progress
+        progress_bar.progress(30)
         log_debug(f"DEBUG: Filler words detected")
         print("Identifying filler words...")
 
-        # Step 7: Replace filler words with silence in the audio (with buffer)
+        # Step 6b: Replace filler words with silence
         st.session_state.current_step = "Removing filler words..."
         with st.spinner("Removing filler words..."):
             modified_audio_path = "temp_modified_audio.wav"
             replace_filler_words_with_silence(audio_path, filler_intervals, modified_audio_path, buffer=0.015)
-            progress_bar.progress(50)  # 50% progress
+            progress_bar.progress(50)
             log_debug("Filler words removed.")
             print("Removed filler words...")
-        
-        # Step 8: Detect non-silent intervals in the modified audio
-        st.session_state.current_step = "Detecting silence..."
-        with st.spinner("Detecting silence..."):
-            non_silent_times = detect_non_silent_intervals(modified_audio_path)
-        
-        # Step 9: Trim the video and audio to remove the silent segments
-        st.session_state.current_step = "Trimming video..."
-        with st.spinner("Trimming video..."):
-            final_video_path = trim_video_and_audio(video_clip, non_silent_times, output_video)
-            progress_bar.progress(75)  # 75% progress
-            print("Removing filler words...")
-            log_debug(f"Filler words removed. Final video saved to: {final_video_path}")
     else:
-        log_debug("No filler words detected. Skipping removal.")
-        final_video_path = input_video  # Skip filler word removal if no words provided
+        log_debug("No filler words provided. Proceeding with original audio for silence removal.")
+        st.session_state.filler_words_count = 0
 
-    # Step 10: Generate SRT transcript for the output trimmed video
+    # Step 7: Detect non-silent intervals (always runs, using modified or original audio)
+    st.session_state.current_step = "Detecting silence..."
+    with st.spinner("Detecting silence..."):
+        non_silent_times = detect_non_silent_intervals(modified_audio_path)
+    progress_bar.progress(60)  # Adjusted progress
+        
+    # Step 8: Trim the video and audio to remove silent segments
+    st.session_state.current_step = "Trimming video..."
+    with st.spinner("Trimming video..."):
+        final_video_path = trim_video_and_audio(video_clip, non_silent_times, output_video)
+    progress_bar.progress(75)
+    print("Trimmed video to remove silences...")
+    log_debug(f"Silences removed. Final video saved to: {final_video_path}")
+
+    # Step 9: Generate SRT for the output video
     st.session_state.current_step = "Generating output video SRT..."
     with st.spinner("Generating output video SRT..."):
         output_audio_path = "temp_output_audio.wav"
         extract_audio(load_video(final_video_path), output_audio_path)
-        output_words = transcribe_audio(output_audio_path, model=whisper_model)
+        output_words = transcribe_audio(output_audio_path, whisper_model)
         output_srt_path = "output_transcript.srt"
         generate_srt(output_words, output_srt_path)
         log_debug(f"DEBUG: Output video transcript saved to: {output_srt_path}")
-    progress_bar.progress(80)  # 80% progress
-    print("Generating final video and output SRT...")
+    progress_bar.progress(80)
+    print("Generated output SRT...")
 
     # Clean up temporary files
     os.remove(audio_path)
@@ -447,6 +450,8 @@ def detect_non_silent_intervals(audio_path, top_db=30):
     non_silent_intervals = librosa.effects.split(y, top_db=top_db)
     non_silent_times = [(start / sr, end / sr) for start, end in non_silent_intervals
         if (end - start) / sr > 0.5] # e.g. 0.5 seconds minumum duration
+    log_debug(f"Detected non-silent intervals: {non_silent_times}")
+    log_debug(f"DEBUG: Total non-silent segments: {len(non_silent_times)}")
     return non_silent_times
 
 def transcribe_audio(audio_path, model):
@@ -497,7 +502,7 @@ def detect_filler_words(words, filler_words):
     log_debug(f"DEBUG: Detected filler intervals: {filler_intervals}")
     return filler_words_count, filler_intervals
 
-def replace_filler_words_with_silence(audio_path, filler_intervals, output_audio_path, buffer=0.05):
+def replace_filler_words_with_silence(audio_path, filler_intervals, output_audio_path, buffer=0.01):
     """
     Replace filler word segments in the audio with silence, with a small buffer added to the intervals.
     
@@ -530,11 +535,37 @@ def replace_filler_words_with_silence(audio_path, filler_intervals, output_audio
     audio.export(output_audio_path, format="wav")
     log_debug(f"DEBUG: Filler words replaced with silence (with buffer). Modified audio saved to: {output_audio_path}")
 
+# def trim_video_and_audio(video_clip, non_silent_times, output_video_path):
+#    """Trim the video and audio to match the detected non-silent intervals."""
+#    video_subclips = [video_clip.subclip(start, end) for (start, end) in non_silent_times]
+#    final_clip = concatenate_videoclips(video_subclips)
+#    final_clip.write_videofile(output_video_path, codec="libx264", audio_codec="aac")
+#    return output_video_path
+
 def trim_video_and_audio(video_clip, non_silent_times, output_video_path):
-    """Trim the video and audio to match the detected non-silent intervals."""
-    video_subclips = [video_clip.subclip(start, end) for (start, end) in non_silent_times]
+    if not non_silent_times:
+        log_debug("WARNING: No non-silent intervals detected. Copying original video.")
+        video_clip.write_videofile(output_video_path, codec="libx264", audio_codec="aac")
+        return output_video_path
+    
+    log_debug(f"Trimming with intervals: {non_silent_times}")
+    video_subclips = []
+    for start, end in non_silent_times:
+        if start < end and end <= video_clip.duration:
+            video_subclips.append(video_clip.subclip(start, end))
+            log_debug(f"Added subclip: {start}s to {end}s")
+        else:
+            log_debug(f"Skipping invalid interval: {start}s to {end}s")
+    
+    if not video_subclips:
+        log_debug("ERROR: No valid subclips to concatenate. Using original video.")
+        video_clip.write_videofile(output_video_path, codec="libx264", audio_codec="aac")
+        return output_video_path
+    
     final_clip = concatenate_videoclips(video_subclips)
+    log_debug(f"Concatenated {len(video_subclips)} subclips")
     final_clip.write_videofile(output_video_path, codec="libx264", audio_codec="aac")
+    log_debug(f"Final video written to {output_video_path}")
     return output_video_path
 
 def get_filler_words(filler_words_input):
